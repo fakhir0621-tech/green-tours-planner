@@ -11,6 +11,7 @@ import About from "./pages/About";
 import Contact from "./pages/Contact";
 import AdminDashboard from "./pages/AdminDashboard";
 import BookingPage from "./pages/BookingPage";
+import ChatWidget from "./components/ChatWidget";
 
 function App() {
   return (
@@ -29,6 +30,8 @@ function App() {
         <Route path="/book/:tourId" element={<BookingPage />} />
       </Routes>
       <Footer />
+      {/* CHATBOT WIDGET — shows on every page */}
+      <ChatWidget />
     </Router>
   );
 }

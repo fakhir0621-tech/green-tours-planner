@@ -28,6 +28,7 @@ const EMPTY_FORM = {
   description: "", category: "Adventure", availableSeats: "10",
   virtualTourLink: "", images: ["", "", ""],
   itinerary: [{ day: 1, description: "" }],
+  virtualTourScenes: [{ title: "", imageUrl: "", description: "" }],
 };
 
 // ============================================================
@@ -183,9 +184,22 @@ function TourFormModal({ editingTour, onClose, onSaved, token }) {
         itinerary: editingTour.itinerary?.length > 0
           ? editingTour.itinerary.map(d => ({ day: d.day, description: d.description }))
           : [{ day: 1, description: "" }],
+        // ---- NEW: Virtual Tour Scenes ----
+        virtualTourScenes: editingTour.virtualTourScenes?.length > 0
+          ? editingTour.virtualTourScenes.map(s => ({
+              title:       s.title || "",
+              imageUrl:    s.imageUrl || "",
+              description: s.description || "",
+            }))
+          : [{ title: "", imageUrl: "", description: "" }],
       };
     }
-    return { ...EMPTY_FORM, images: ["", "", ""], itinerary: [{ day: 1, description: "" }] };
+    return {
+      ...EMPTY_FORM,
+      images: ["", "", ""],
+      itinerary: [{ day: 1, description: "" }],
+      virtualTourScenes: [{ title: "", imageUrl: "", description: "" }],
+    };
   });
   const [saving, setSaving]   = useState(false);
   const [error, setError]     = useState("");
@@ -218,6 +232,19 @@ function TourFormModal({ editingTour, onClose, onSaved, token }) {
     const updated = form.itinerary.map((d, i) => i === index ? { ...d, description: val } : d);
     setForm(prev => ({ ...prev, itinerary: updated }));
   };
+
+  // ---- NEW: Virtual scene helpers ----
+  const addVirtualScene = () => {
+    setForm(prev => ({ ...prev, virtualTourScenes: [...prev.virtualTourScenes, { title: "", imageUrl: "", description: "" }] }));
+  };
+  const removeVirtualScene = (index) => {
+    setForm(prev => ({ ...prev, virtualTourScenes: prev.virtualTourScenes.filter((_, i) => i !== index) }));
+  };
+  const setVirtualScene = (index, field, val) => {
+    const updated = form.virtualTourScenes.map((s, i) => i === index ? { ...s, [field]: val } : s);
+    setForm(prev => ({ ...prev, virtualTourScenes: updated }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.tourName.trim()) { setError("Tour name is required."); setActiveSection("basic"); return; }
@@ -232,6 +259,14 @@ function TourFormModal({ editingTour, onClose, onSaved, token }) {
       virtualTourLink: form.virtualTourLink.trim(),
       images: form.images.filter(img => img.trim() !== ""),
       itinerary: form.itinerary.filter(d => d.description.trim() !== ""),
+      // ---- NEW: include virtual scenes in payload ----
+      virtualTourScenes: form.virtualTourScenes
+        .filter(s => s.imageUrl.trim() !== "")
+        .map(s => ({
+          title:       s.title.trim() || "Scene",
+          imageUrl:    s.imageUrl.trim(),
+          description: s.description.trim(),
+        })),
     };
     try {
       const url = isEdit ? `${BASE_URL}/tours/${editingTour._id}` : `${BASE_URL}/tours/add`;
@@ -249,12 +284,16 @@ function TourFormModal({ editingTour, onClose, onSaved, token }) {
       setError(err.message || "Something went wrong.");
     } finally { setSaving(false); }
   };
+
+  // ---- NEW: Added "virtual" section ----
   const SECTIONS = [
     { key: "basic",     label: "Basic Info",  icon: "📋" },
     { key: "details",   label: "Details",     icon: "📝" },
     { key: "images",    label: "Images",      icon: "🖼️" },
     { key: "itinerary", label: "Itinerary",   icon: "🗓️" },
+    { key: "virtual",   label: "360° Tour",   icon: "🌐" },
   ];
+
   return (
     <div onClick={e => e.target === e.currentTarget && onClose()} style={{
       position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)",
@@ -307,6 +346,8 @@ function TourFormModal({ editingTour, onClose, onSaved, token }) {
         <div style={{ overflowY: "auto", flex: 1 }}>
           <form onSubmit={handleSubmit}>
             <div style={{ padding: "24px 28px" }}>
+
+              {/* ---- BASIC ---- */}
               {activeSection === "basic" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
@@ -339,6 +380,8 @@ function TourFormModal({ editingTour, onClose, onSaved, token }) {
                   </div>
                 </div>
               )}
+
+              {/* ---- DETAILS ---- */}
               {activeSection === "details" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
                   <div>
@@ -352,6 +395,8 @@ function TourFormModal({ editingTour, onClose, onSaved, token }) {
                   </div>
                 </div>
               )}
+
+              {/* ---- IMAGES ---- */}
               {activeSection === "images" && (
                 <div>
                   <p style={{ fontSize: "13px", color: "#6b7280", marginBottom: "20px", lineHeight: "1.7", background: "#f0fdf4", padding: "12px 14px", borderRadius: "8px", border: "1px solid #bbf7d0" }}>
@@ -372,6 +417,8 @@ function TourFormModal({ editingTour, onClose, onSaved, token }) {
                   </div>
                 </div>
               )}
+
+              {/* ---- ITINERARY ---- */}
               {activeSection === "itinerary" && (
                 <div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
@@ -402,6 +449,139 @@ function TourFormModal({ editingTour, onClose, onSaved, token }) {
                   </div>
                 </div>
               )}
+
+              {/* ---- NEW: VIRTUAL 360° TOUR ---- */}
+              {activeSection === "virtual" && (
+                <div>
+                  <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px", padding: "14px 16px", marginBottom: "20px" }}>
+                    <p style={{ fontSize: "13px", color: "#166534", fontWeight: "600", marginBottom: "4px" }}>🌐 Virtual 3D Tour Scenes</p>
+                    <p style={{ fontSize: "12px", color: "#16a34a", lineHeight: "1.6" }}>
+                      Add equirectangular 360° panorama images (2:1 ratio). Free sources: <strong>flickr.com/groups/equirectangular</strong>, <strong>polyhaven.com</strong>, or any panorama image URL. Each scene is a separate stop in the virtual tour shown on the Tour Details page.
+                    </p>
+                  </div>
+
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                    <div>
+                      <p style={{ fontSize: "14px", fontWeight: "600", color: "#1f2937" }}>
+                        Scenes ({form.virtualTourScenes.length})
+                      </p>
+                      <p style={{ fontSize: "12px", color: "#9ca3af", marginTop: "2px" }}>
+                        {form.virtualTourScenes.filter(s => s.imageUrl.trim()).length} scene{form.virtualTourScenes.filter(s => s.imageUrl.trim()).length !== 1 ? "s" : ""} with images
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={addVirtualScene}
+                      style={{ background: "#f0fdf4", color: "#16a34a", border: "1.5px solid #bbf7d0", padding: "8px 16px", borderRadius: "50px", fontSize: "12px", fontWeight: "600", cursor: "pointer" }}
+                    >
+                      + Add Scene
+                    </button>
+                  </div>
+
+                  {form.virtualTourScenes.length === 0 && (
+                    <div style={{ textAlign: "center", padding: "40px", background: "#f9fafb", borderRadius: "12px", border: "1.5px dashed #e5e7eb" }}>
+                      <p style={{ fontSize: "32px", marginBottom: "8px" }}>🌐</p>
+                      <p style={{ fontSize: "14px", color: "#9ca3af" }}>No scenes yet. Click "+ Add Scene".</p>
+                    </div>
+                  )}
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+                    {form.virtualTourScenes.map((scene, idx) => (
+                      <div key={idx} style={{ background: "#f9fafb", border: `1.5px solid ${scene.imageUrl.trim() ? "#bbf7d0" : "#e5e7eb"}`, borderRadius: "12px", padding: "18px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <div style={{ width: "28px", height: "28px", borderRadius: "50%", background: scene.imageUrl.trim() ? "#16a34a" : "#9ca3af", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: "700" }}>
+                              {idx + 1}
+                            </div>
+                            <span style={{ fontSize: "13px", fontWeight: "600", color: "#374151" }}>
+                              Scene {idx + 1}
+                              {scene.title.trim() && ` — ${scene.title}`}
+                            </span>
+                            {scene.imageUrl.trim() && (
+                              <span style={{ fontSize: "10px", background: "#dcfce7", color: "#16a34a", padding: "2px 8px", borderRadius: "50px", fontWeight: "600" }}>
+                                ✅ Ready
+                              </span>
+                            )}
+                          </div>
+                          {form.virtualTourScenes.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => removeVirtualScene(idx)}
+                              style={{ background: "#fef2f2", color: "#dc2626", border: "1.5px solid #fecaca", width: "28px", height: "28px", borderRadius: "50%", fontSize: "14px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                            >✕</button>
+                          )}
+                        </div>
+
+                        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                          <div>
+                            <label style={labelStyle}>Scene Title</label>
+                            <input
+                              type="text"
+                              value={scene.title}
+                              onChange={e => setVirtualScene(idx, "title", e.target.value)}
+                              placeholder="e.g. Main Entrance, Mountain View, Base Camp"
+                              style={inputStyle}
+                              onFocus={e => e.target.style.borderColor = "#16a34a"}
+                              onBlur={e => e.target.style.borderColor = "#e5e7eb"}
+                            />
+                          </div>
+                          <div>
+                            <label style={labelStyle}>360° Panorama Image URL *</label>
+                            <input
+                              type="url"
+                              value={scene.imageUrl}
+                              onChange={e => setVirtualScene(idx, "imageUrl", e.target.value)}
+                              placeholder="https://example.com/panorama.jpg (equirectangular 2:1 ratio)"
+                              style={{
+                                ...inputStyle,
+                                borderColor: scene.imageUrl.trim() ? "#16a34a" : "#e5e7eb",
+                              }}
+                              onFocus={e => e.target.style.borderColor = "#16a34a"}
+                              onBlur={e => e.target.style.borderColor = scene.imageUrl.trim() ? "#16a34a" : "#e5e7eb"}
+                            />
+                            {scene.imageUrl.trim() && (
+                              <div style={{ marginTop: "8px", height: "80px", borderRadius: "6px", overflow: "hidden", border: "1px solid #e5e7eb" }}>
+                                <img
+                                  src={scene.imageUrl}
+                                  alt="Panorama preview"
+                                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                                  onError={e => {
+                                    e.target.style.display = "none";
+                                    e.target.parentElement.innerHTML = '<div style="height:100%;display:flex;align-items:center;justify-content:center;background:#fef2f2;color:#dc2626;font-size:12px;">⚠️ Invalid image URL</div>';
+                                  }}
+                                />
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <label style={labelStyle}>Scene Description (optional)</label>
+                            <input
+                              type="text"
+                              value={scene.description}
+                              onChange={e => setVirtualScene(idx, "description", e.target.value)}
+                              placeholder="e.g. Views from the top of Fairy Meadows"
+                              style={inputStyle}
+                              onFocus={e => e.target.style.borderColor = "#16a34a"}
+                              onBlur={e => e.target.style.borderColor = "#e5e7eb"}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* SCENES SUMMARY */}
+                  {form.virtualTourScenes.some(s => s.imageUrl.trim()) && (
+                    <div style={{ marginTop: "16px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px", padding: "12px 16px" }}>
+                      <p style={{ fontSize: "12px", color: "#16a34a", fontWeight: "600" }}>
+                        🌐 {form.virtualTourScenes.filter(s => s.imageUrl.trim()).length} panoramic scene{form.virtualTourScenes.filter(s => s.imageUrl.trim()).length !== 1 ? "s" : ""} will be saved.
+                        The "🌐 Virtual 3D Tour" button will appear on this tour's detail page.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
             </div>
             <div style={{ padding: "16px 28px", borderTop: "1px solid #e5e7eb", background: "#f9fafb", display: "flex", gap: "12px", justifyContent: "flex-end", flexShrink: 0 }}>
               <button type="button" onClick={onClose} style={{ background: "white", color: "#6b7280", border: "1.5px solid #e5e7eb", padding: "11px 24px", borderRadius: "50px", fontSize: "14px", fontWeight: "500", cursor: "pointer" }}>Cancel</button>
@@ -665,115 +845,46 @@ export default function AdminDashboard() {
     setModAction(null);
   };
 
-  // ---- COMPUTED ----
   const pendingPayments  = bookings.filter(b => (b.paymentStatus || "").toLowerCase() === "pending" && b.transactionId);
   const bannedCount      = users.filter(u => u.isBanned).length;
   const suspendedCount   = users.filter(u => u.isSuspended && !u.isBanned).length;
   const flaggedCount     = users.filter(u => u.isFlagged && !u.isBanned).length;
   const moderationAlerts = bannedCount + suspendedCount + flaggedCount;
 
-  // ============================================================
-  // ---- ANALYTICS COMPUTED DATA (from existing state) ----
-  // ============================================================
   const analyticsData = (() => {
-    // Booking status breakdown
     const confirmed = bookings.filter(b => (b.status || "").toLowerCase() === "confirmed").length;
     const pending   = bookings.filter(b => (b.status || "").toLowerCase() === "pending").length;
     const cancelled = bookings.filter(b => (b.status || "").toLowerCase() === "cancelled").length;
     const rejected  = bookings.filter(b => (b.status || "").toLowerCase() === "rejected").length;
-
-    // Monthly bookings — last 6 months
     const now = new Date();
     const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
     const monthlyBookings = Array.from({ length: 6 }, (_, i) => {
       const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
-      const count = bookings.filter(b => {
-        const bd = new Date(b.createdAt || b.bookingDate);
-        return bd.getMonth() === d.getMonth() && bd.getFullYear() === d.getFullYear();
-      }).length;
+      const count = bookings.filter(b => { const bd = new Date(b.createdAt || b.bookingDate); return bd.getMonth() === d.getMonth() && bd.getFullYear() === d.getFullYear(); }).length;
       return { label: monthNames[d.getMonth()], value: count };
     });
-
-    // Monthly revenue — last 6 months
     const monthlyRevenue = Array.from({ length: 6 }, (_, i) => {
       const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
-      const rev = bookings
-        .filter(b => {
-          const bd = new Date(b.createdAt || b.bookingDate);
-          return bd.getMonth() === d.getMonth() && bd.getFullYear() === d.getFullYear() && (b.status || "").toLowerCase() === "confirmed";
-        })
-        .reduce((sum, b) => sum + (b.totalPrice || 0), 0);
-      return { label: monthNames[d.getMonth()], value: Math.round(rev / 1000) }; // in thousands
+      const rev = bookings.filter(b => { const bd = new Date(b.createdAt || b.bookingDate); return bd.getMonth() === d.getMonth() && bd.getFullYear() === d.getFullYear() && (b.status || "").toLowerCase() === "confirmed"; }).reduce((sum, b) => sum + (b.totalPrice || 0), 0);
+      return { label: monthNames[d.getMonth()], value: Math.round(rev / 1000) };
     });
-
-    // Top tours by bookings
     const tourBookingCount = {};
-    bookings.forEach(b => {
-      const name = b.tour?.tourName || b.tourName || "Unknown";
-      tourBookingCount[name] = (tourBookingCount[name] || 0) + 1;
-    });
-    const topTours = Object.entries(tourBookingCount)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([label, value]) => ({ label: label.slice(0, 12), value }));
-
-    // Top customers by bookings
+    bookings.forEach(b => { const name = b.tour?.tourName || b.tourName || "Unknown"; tourBookingCount[name] = (tourBookingCount[name] || 0) + 1; });
+    const topTours = Object.entries(tourBookingCount).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([label, value]) => ({ label: label.slice(0, 12), value }));
     const customerCount = {};
-    bookings.forEach(b => {
-      const name = b.user?.name || "Unknown";
-      const id   = b.user?._id || name;
-      if (!customerCount[id]) customerCount[id] = { name, count: 0, spent: 0 };
-      customerCount[id].count++;
-      customerCount[id].spent += b.totalPrice || 0;
-    });
-    const topCustomers = Object.values(customerCount)
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5);
-
-    // Category breakdown
+    bookings.forEach(b => { const name = b.user?.name || "Unknown"; const id = b.user?._id || name; if (!customerCount[id]) customerCount[id] = { name, count: 0, spent: 0 }; customerCount[id].count++; customerCount[id].spent += b.totalPrice || 0; });
+    const topCustomers = Object.values(customerCount).sort((a, b) => b.count - a.count).slice(0, 5);
     const categoryCount = {};
-    tours.forEach(t => {
-      const cat = t.category || "Other";
-      categoryCount[cat] = (categoryCount[cat] || 0) + 1;
-    });
+    tours.forEach(t => { const cat = t.category || "Other"; categoryCount[cat] = (categoryCount[cat] || 0) + 1; });
     const categoryColors = ["#16a34a","#0891b2","#7c3aed","#db6b1f","#dc2626","#ca8a04","#059669","#1d4ed8"];
-    const categorySegments = Object.entries(categoryCount)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6)
-      .map(([label, value], i) => ({ label, value, color: categoryColors[i % categoryColors.length] }));
-
-    // Rating distribution
-    const ratingDist = [1, 2, 3, 4, 5].map(r => ({
-      label: `${r}★`,
-      value: allReviews.filter(rev => (rev.rating || 5) === r).length,
-    }));
-
-    // Payment method breakdown
+    const categorySegments = Object.entries(categoryCount).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([label, value], i) => ({ label, value, color: categoryColors[i % categoryColors.length] }));
+    const ratingDist = [1, 2, 3, 4, 5].map(r => ({ label: `${r}★`, value: allReviews.filter(rev => (rev.rating || 5) === r).length }));
     const pmCount = { easypaisa: 0, jazzcash: 0, bank: 0 };
     bookings.forEach(b => { if (b.paymentMethod && pmCount[b.paymentMethod] !== undefined) pmCount[b.paymentMethod]++; });
-    const paymentSegments = [
-      { label: "EasyPaisa",     value: pmCount.easypaisa, color: "#00a651" },
-      { label: "JazzCash",      value: pmCount.jazzcash,  color: "#cc0000" },
-      { label: "Bank Transfer", value: pmCount.bank,      color: "#1a56db" },
-    ].filter(s => s.value > 0);
-
-    // Avg rating
-    const avgRating = allReviews.length > 0
-      ? (allReviews.reduce((s, r) => s + (r.rating || 5), 0) / allReviews.length).toFixed(1)
-      : "N/A";
-
-    // Conversion rate
-    const conversionRate = bookings.length > 0
-      ? Math.round((confirmed / bookings.length) * 100)
-      : 0;
-
-    return {
-      confirmed, pending, cancelled, rejected,
-      monthlyBookings, monthlyRevenue,
-      topTours, topCustomers,
-      categorySegments, ratingDist, paymentSegments,
-      avgRating, conversionRate,
-    };
+    const paymentSegments = [{ label: "EasyPaisa", value: pmCount.easypaisa, color: "#00a651" }, { label: "JazzCash", value: pmCount.jazzcash, color: "#cc0000" }, { label: "Bank Transfer", value: pmCount.bank, color: "#1a56db" }].filter(s => s.value > 0);
+    const avgRating = allReviews.length > 0 ? (allReviews.reduce((s, r) => s + (r.rating || 5), 0) / allReviews.length).toFixed(1) : "N/A";
+    const conversionRate = bookings.length > 0 ? Math.round((confirmed / bookings.length) * 100) : 0;
+    return { confirmed, pending, cancelled, rejected, monthlyBookings, monthlyRevenue, topTours, topCustomers, categorySegments, ratingDist, paymentSegments, avgRating, conversionRate };
   })();
 
   const TABS = [
@@ -787,20 +898,12 @@ export default function AdminDashboard() {
     { key: "reviews",    icon: "⭐", label: `Reviews (${allReviews.length})` },
   ];
 
-  const thStyle = {
-    padding: "12px 16px", textAlign: "left", fontSize: "11px", fontWeight: "700",
-    color: "var(--gray-400)", letterSpacing: "1px", textTransform: "uppercase",
-    borderBottom: "1px solid var(--gray-100)", background: "var(--gray-50)", whiteSpace: "nowrap",
-  };
-  const tdStyle = {
-    padding: "14px 16px", fontSize: "14px", color: "var(--gray-700)",
-    borderBottom: "1px solid var(--gray-50)", verticalAlign: "middle",
-  };
+  const thStyle = { padding: "12px 16px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "var(--gray-400)", letterSpacing: "1px", textTransform: "uppercase", borderBottom: "1px solid var(--gray-100)", background: "var(--gray-50)", whiteSpace: "nowrap" };
+  const tdStyle = { padding: "14px 16px", fontSize: "14px", color: "var(--gray-700)", borderBottom: "1px solid var(--gray-50)", verticalAlign: "middle" };
 
   const getUserStatus = (u) => {
     if (u.isBanned)    return { label: "Banned",    color: "#dc2626", bg: "#fee2e2", icon: "🚫" };
-    if (u.isSuspended && u.suspendedUntil && new Date(u.suspendedUntil) > new Date())
-                       return { label: "Suspended", color: "#d97706", bg: "#fef9c3", icon: "⏸️" };
+    if (u.isSuspended && u.suspendedUntil && new Date(u.suspendedUntil) > new Date()) return { label: "Suspended", color: "#d97706", bg: "#fef9c3", icon: "⏸️" };
     if (u.isFlagged)   return { label: "Flagged",   color: "#7c3aed", bg: "#ede9fe", icon: "🚩" };
     if (u.role === "admin") return { label: "Admin", color: "#1d4ed8", bg: "#eff6ff", icon: "👑" };
     return { label: "Active", color: "#16a34a", bg: "#dcfce7", icon: "✅" };
@@ -846,16 +949,7 @@ export default function AdminDashboard() {
         {/* TABS */}
         <div style={{ display: "flex", background: "white", borderRadius: "14px", overflow: "hidden", border: "1px solid var(--gray-100)", marginBottom: "32px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)", overflowX: "auto" }}>
           {TABS.map((tab, i) => (
-            <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={{
-              flex: 1, minWidth: "fit-content", padding: "15px 12px", border: "none",
-              borderRight: i < TABS.length - 1 ? "1px solid var(--gray-100)" : "none",
-              background: activeTab === tab.key ? "var(--green-50)" : "white",
-              color: activeTab === tab.key ? "var(--green-700)" : "var(--gray-500)",
-              fontSize: "12px", fontWeight: activeTab === tab.key ? "600" : "400",
-              cursor: "pointer", transition: "all 0.2s",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              gap: "5px", whiteSpace: "nowrap", position: "relative",
-            }}>
+            <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={{ flex: 1, minWidth: "fit-content", padding: "15px 12px", border: "none", borderRight: i < TABS.length - 1 ? "1px solid var(--gray-100)" : "none", background: activeTab === tab.key ? "var(--green-50)" : "white", color: activeTab === tab.key ? "var(--green-700)" : "var(--gray-500)", fontSize: "12px", fontWeight: activeTab === tab.key ? "600" : "400", cursor: "pointer", transition: "all 0.2s", display: "flex", alignItems: "center", justifyContent: "center", gap: "5px", whiteSpace: "nowrap", position: "relative" }}>
               {tab.icon} {tab.label}
               {tab.key === "payments" && pendingPayments.length > 0 && <span style={{ position: "absolute", top: "8px", right: "8px", width: "7px", height: "7px", borderRadius: "50%", background: "#dc2626" }} />}
               {tab.key === "moderation" && moderationAlerts > 0 && <span style={{ position: "absolute", top: "8px", right: "8px", width: "7px", height: "7px", borderRadius: "50%", background: "#d97706" }} />}
@@ -942,217 +1036,79 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* ============================================================ */}
-        {/* ---- NEW: ANALYTICS TAB ---- */}
-        {/* ============================================================ */}
+        {/* ---- ANALYTICS TAB ---- */}
         {activeTab === "analytics" && (
           <div>
-            {/* EXPORT BUTTON */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px", flexWrap: "wrap", gap: "12px" }}>
               <div>
-                <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: "22px", fontWeight: "700", color: "var(--gray-800)", marginBottom: "4px" }}>
-                  📈 Analytics Report
-                </h2>
-                <p style={{ fontSize: "13px", color: "var(--gray-400)" }}>
-                  Real-time insights from your database — updated on every dashboard load.
-                </p>
+                <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: "22px", fontWeight: "700", color: "var(--gray-800)", marginBottom: "4px" }}>📈 Analytics Report</h2>
+                <p style={{ fontSize: "13px", color: "var(--gray-400)" }}>Real-time insights from your database — updated on every dashboard load.</p>
               </div>
-              <button
-                onClick={() => {
-                  const report = {
-                    generatedAt: new Date().toLocaleString(),
-                    totalUsers: stats.totalUsers,
-                    totalTours: stats.totalTours,
-                    totalBookings: stats.totalBookings,
-                    totalRevenue: `Rs. ${stats.totalRevenue.toLocaleString()}`,
-                    confirmedBookings: analyticsData.confirmed,
-                    pendingBookings: analyticsData.pending,
-                    cancelledBookings: analyticsData.cancelled,
-                    conversionRate: `${analyticsData.conversionRate}%`,
-                    averageRating: analyticsData.avgRating,
-                    totalReviews: allReviews.length,
-                  };
-                  const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
-                  const url  = URL.createObjectURL(blob);
-                  const a    = document.createElement("a");
-                  a.href     = url;
-                  a.download = `GTP-Analytics-${new Date().toISOString().split("T")[0]}.json`;
-                  a.click();
-                  URL.revokeObjectURL(url);
-                }}
-                style={{
-                  background: "var(--green-600)", color: "white",
-                  border: "none", padding: "10px 22px",
-                  borderRadius: "50px", fontSize: "13px", fontWeight: "600",
-                  cursor: "pointer", display: "flex", alignItems: "center", gap: "7px",
-                  boxShadow: "0 4px 12px rgba(22,163,74,0.3)",
-                }}
-              >
+              <button onClick={() => { const report = { generatedAt: new Date().toLocaleString(), totalUsers: stats.totalUsers, totalTours: stats.totalTours, totalBookings: stats.totalBookings, totalRevenue: `Rs. ${stats.totalRevenue.toLocaleString()}`, confirmedBookings: analyticsData.confirmed, pendingBookings: analyticsData.pending, cancelledBookings: analyticsData.cancelled, conversionRate: `${analyticsData.conversionRate}%`, averageRating: analyticsData.avgRating, totalReviews: allReviews.length }; const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `GTP-Analytics-${new Date().toISOString().split("T")[0]}.json`; a.click(); URL.revokeObjectURL(url); }} style={{ background: "var(--green-600)", color: "white", border: "none", padding: "10px 22px", borderRadius: "50px", fontSize: "13px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", gap: "7px", boxShadow: "0 4px 12px rgba(22,163,74,0.3)" }}>
                 ⬇️ Export Report
               </button>
             </div>
-
-            {/* ROW 1 — KEY METRICS */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: "16px", marginBottom: "24px" }}>
-              <StatCard icon="📋" label="Total Bookings"   value={stats.totalBookings}                          color="#db6b1f" />
-              <StatCard icon="✅" label="Confirmed"        value={analyticsData.confirmed}                      color="#16a34a" sub={`${analyticsData.conversionRate}% conversion`} />
-              <StatCard icon="⏳" label="Pending"          value={analyticsData.pending}                        color="#ca8a04" />
-              <StatCard icon="❌" label="Cancelled/Rejected" value={analyticsData.cancelled + analyticsData.rejected} color="#dc2626" />
-              <StatCard icon="💰" label="Total Revenue"    value={`Rs. ${Math.round(stats.totalRevenue / 1000)}K`} color="#16a34a" sub="confirmed bookings" />
-              <StatCard icon="⭐" label="Avg Rating"       value={analyticsData.avgRating}                      color="#f59e0b" sub={`${allReviews.length} reviews`} />
+              <StatCard icon="📋" label="Total Bookings"      value={stats.totalBookings}                               color="#db6b1f" />
+              <StatCard icon="✅" label="Confirmed"           value={analyticsData.confirmed}                           color="#16a34a" sub={`${analyticsData.conversionRate}% conversion`} />
+              <StatCard icon="⏳" label="Pending"             value={analyticsData.pending}                             color="#ca8a04" />
+              <StatCard icon="❌" label="Cancelled/Rejected"  value={analyticsData.cancelled + analyticsData.rejected}  color="#dc2626" />
+              <StatCard icon="💰" label="Total Revenue"       value={`Rs. ${Math.round(stats.totalRevenue / 1000)}K`}   color="#16a34a" sub="confirmed bookings" />
+              <StatCard icon="⭐" label="Avg Rating"          value={analyticsData.avgRating}                           color="#f59e0b" sub={`${allReviews.length} reviews`} />
             </div>
-
-            {/* ROW 2 — CHARTS */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginBottom: "20px" }}>
-
-              {/* MONTHLY BOOKINGS */}
               <div style={{ background: "white", border: "1px solid var(--gray-100)", borderRadius: "16px", padding: "24px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
-                <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: "16px", fontWeight: "700", color: "var(--gray-800)", marginBottom: "20px" }}>
-                  📅 Monthly Bookings (Last 6 Months)
-                </h3>
-                {analyticsData.monthlyBookings.every(d => d.value === 0) ? (
-                  <div style={{ textAlign: "center", padding: "40px 0", color: "var(--gray-400)" }}>No booking data yet</div>
-                ) : (
-                  <BarChart data={analyticsData.monthlyBookings} color="#db6b1f" height={140} />
-                )}
+                <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: "16px", fontWeight: "700", color: "var(--gray-800)", marginBottom: "20px" }}>📅 Monthly Bookings (Last 6 Months)</h3>
+                {analyticsData.monthlyBookings.every(d => d.value === 0) ? <div style={{ textAlign: "center", padding: "40px 0", color: "var(--gray-400)" }}>No booking data yet</div> : <BarChart data={analyticsData.monthlyBookings} color="#db6b1f" height={140} />}
               </div>
-
-              {/* MONTHLY REVENUE */}
               <div style={{ background: "white", border: "1px solid var(--gray-100)", borderRadius: "16px", padding: "24px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
-                <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: "16px", fontWeight: "700", color: "var(--gray-800)", marginBottom: "4px" }}>
-                  💰 Monthly Revenue (Rs. '000)
-                </h3>
+                <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: "16px", fontWeight: "700", color: "var(--gray-800)", marginBottom: "4px" }}>💰 Monthly Revenue (Rs. '000)</h3>
                 <p style={{ fontSize: "11px", color: "var(--gray-400)", marginBottom: "16px" }}>Confirmed bookings only</p>
-                {analyticsData.monthlyRevenue.every(d => d.value === 0) ? (
-                  <div style={{ textAlign: "center", padding: "40px 0", color: "var(--gray-400)" }}>No revenue data yet</div>
-                ) : (
-                  <BarChart data={analyticsData.monthlyRevenue} color="#16a34a" height={140} />
-                )}
+                {analyticsData.monthlyRevenue.every(d => d.value === 0) ? <div style={{ textAlign: "center", padding: "40px 0", color: "var(--gray-400)" }}>No revenue data yet</div> : <BarChart data={analyticsData.monthlyRevenue} color="#16a34a" height={140} />}
               </div>
             </div>
-
-            {/* ROW 3 — DONUT CHARTS */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "20px", marginBottom: "20px" }}>
-
-              {/* BOOKING STATUS */}
               <div style={{ background: "white", border: "1px solid var(--gray-100)", borderRadius: "16px", padding: "24px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
-                <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: "15px", fontWeight: "700", color: "var(--gray-800)", marginBottom: "20px" }}>
-                  📋 Booking Status
-                </h3>
-                <DonutChart size={140} segments={[
-                  { label: "Confirmed", value: analyticsData.confirmed, color: "#16a34a" },
-                  { label: "Pending",   value: analyticsData.pending,   color: "#ca8a04" },
-                  { label: "Cancelled", value: analyticsData.cancelled, color: "#dc2626" },
-                  { label: "Rejected",  value: analyticsData.rejected,  color: "#9ca3af" },
-                ].filter(s => s.value > 0)} />
+                <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: "15px", fontWeight: "700", color: "var(--gray-800)", marginBottom: "20px" }}>📋 Booking Status</h3>
+                <DonutChart size={140} segments={[{ label: "Confirmed", value: analyticsData.confirmed, color: "#16a34a" }, { label: "Pending", value: analyticsData.pending, color: "#ca8a04" }, { label: "Cancelled", value: analyticsData.cancelled, color: "#dc2626" }, { label: "Rejected", value: analyticsData.rejected, color: "#9ca3af" }].filter(s => s.value > 0)} />
                 {bookings.length === 0 && <p style={{ textAlign: "center", color: "var(--gray-400)", fontSize: "13px" }}>No bookings yet</p>}
               </div>
-
-              {/* TOUR CATEGORIES */}
               <div style={{ background: "white", border: "1px solid var(--gray-100)", borderRadius: "16px", padding: "24px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
-                <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: "15px", fontWeight: "700", color: "var(--gray-800)", marginBottom: "20px" }}>
-                  🗺️ Tour Categories
-                </h3>
-                {analyticsData.categorySegments.length > 0 ? (
-                  <DonutChart size={140} segments={analyticsData.categorySegments} />
-                ) : (
-                  <p style={{ textAlign: "center", color: "var(--gray-400)", fontSize: "13px", paddingTop: "40px" }}>No tours yet</p>
-                )}
+                <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: "15px", fontWeight: "700", color: "var(--gray-800)", marginBottom: "20px" }}>🗺️ Tour Categories</h3>
+                {analyticsData.categorySegments.length > 0 ? <DonutChart size={140} segments={analyticsData.categorySegments} /> : <p style={{ textAlign: "center", color: "var(--gray-400)", fontSize: "13px", paddingTop: "40px" }}>No tours yet</p>}
               </div>
-
-              {/* PAYMENT METHODS */}
               <div style={{ background: "white", border: "1px solid var(--gray-100)", borderRadius: "16px", padding: "24px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
-                <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: "15px", fontWeight: "700", color: "var(--gray-800)", marginBottom: "20px" }}>
-                  💳 Payment Methods
-                </h3>
-                {analyticsData.paymentSegments.length > 0 ? (
-                  <DonutChart size={140} segments={analyticsData.paymentSegments} />
-                ) : (
-                  <p style={{ textAlign: "center", color: "var(--gray-400)", fontSize: "13px", paddingTop: "40px" }}>No payment data yet</p>
-                )}
+                <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: "15px", fontWeight: "700", color: "var(--gray-800)", marginBottom: "20px" }}>💳 Payment Methods</h3>
+                {analyticsData.paymentSegments.length > 0 ? <DonutChart size={140} segments={analyticsData.paymentSegments} /> : <p style={{ textAlign: "center", color: "var(--gray-400)", fontSize: "13px", paddingTop: "40px" }}>No payment data yet</p>}
               </div>
             </div>
-
-            {/* ROW 4 — RATINGS + TOP TOURS */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginBottom: "20px" }}>
-
-              {/* RATING DISTRIBUTION */}
               <div style={{ background: "white", border: "1px solid var(--gray-100)", borderRadius: "16px", padding: "24px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
-                <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: "16px", fontWeight: "700", color: "var(--gray-800)", marginBottom: "20px" }}>
-                  ⭐ Rating Distribution
-                </h3>
-                {allReviews.length === 0 ? (
-                  <div style={{ textAlign: "center", padding: "40px 0", color: "var(--gray-400)" }}>No reviews yet</div>
-                ) : (
-                  <BarChart data={analyticsData.ratingDist} color="#f59e0b" height={120} />
-                )}
+                <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: "16px", fontWeight: "700", color: "var(--gray-800)", marginBottom: "20px" }}>⭐ Rating Distribution</h3>
+                {allReviews.length === 0 ? <div style={{ textAlign: "center", padding: "40px 0", color: "var(--gray-400)" }}>No reviews yet</div> : <BarChart data={analyticsData.ratingDist} color="#f59e0b" height={120} />}
               </div>
-
-              {/* TOP TOURS BY BOOKINGS */}
               <div style={{ background: "white", border: "1px solid var(--gray-100)", borderRadius: "16px", padding: "24px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
-                <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: "16px", fontWeight: "700", color: "var(--gray-800)", marginBottom: "20px" }}>
-                  🏆 Most Booked Tours
-                </h3>
-                {analyticsData.topTours.length === 0 ? (
-                  <div style={{ textAlign: "center", padding: "40px 0", color: "var(--gray-400)" }}>No booking data yet</div>
-                ) : (
-                  <BarChart data={analyticsData.topTours} color="#7c3aed" height={120} />
-                )}
+                <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: "16px", fontWeight: "700", color: "var(--gray-800)", marginBottom: "20px" }}>🏆 Most Booked Tours</h3>
+                {analyticsData.topTours.length === 0 ? <div style={{ textAlign: "center", padding: "40px 0", color: "var(--gray-400)" }}>No booking data yet</div> : <BarChart data={analyticsData.topTours} color="#7c3aed" height={120} />}
               </div>
             </div>
-
-            {/* ROW 5 — TOP CUSTOMERS TABLE */}
             <div style={{ background: "white", border: "1px solid var(--gray-100)", borderRadius: "16px", overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
               <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--gray-100)" }}>
-                <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: "18px", fontWeight: "700", color: "var(--gray-800)" }}>
-                  👑 Top Customers
-                </h3>
+                <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: "18px", fontWeight: "700", color: "var(--gray-800)" }}>👑 Top Customers</h3>
                 <p style={{ fontSize: "13px", color: "var(--gray-400)", marginTop: "4px" }}>Ranked by number of bookings</p>
               </div>
               {analyticsData.topCustomers.length === 0 ? (
                 <div style={{ textAlign: "center", padding: "40px", color: "var(--gray-400)" }}>No customer data yet</div>
               ) : (
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead>
-                    <tr>
-                      {["Rank", "Customer", "Bookings", "Total Spent"].map(h => (
-                        <th key={h} style={thStyle}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
+                  <thead><tr>{["Rank", "Customer", "Bookings", "Total Spent"].map(h => <th key={h} style={thStyle}>{h}</th>)}</tr></thead>
                   <tbody>
                     {analyticsData.topCustomers.map((c, i) => (
-                      <tr key={i}
-                        onMouseEnter={e => e.currentTarget.style.background = "var(--gray-50)"}
-                        onMouseLeave={e => e.currentTarget.style.background = "white"}
-                      >
-                        <td style={tdStyle}>
-                          <span style={{
-                            display: "inline-flex", alignItems: "center", justifyContent: "center",
-                            width: "28px", height: "28px", borderRadius: "50%",
-                            background: i === 0 ? "#fef9c3" : i === 1 ? "#f3f4f6" : i === 2 ? "#fef2f2" : "var(--gray-50)",
-                            color: i === 0 ? "#ca8a04" : i === 1 ? "#6b7280" : i === 2 ? "#dc2626" : "var(--gray-400)",
-                            fontSize: "13px", fontWeight: "700",
-                          }}>
-                            {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}
-                          </span>
-                        </td>
-                        <td style={tdStyle}>
-                          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                            <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: "var(--green-600)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", fontWeight: "700", color: "white", flexShrink: 0 }}>
-                              {c.name[0]?.toUpperCase()}
-                            </div>
-                            <span style={{ fontWeight: "500", color: "var(--gray-800)" }}>{c.name}</span>
-                          </div>
-                        </td>
-                        <td style={tdStyle}>
-                          <span style={{ background: "var(--green-50)", color: "var(--green-700)", padding: "3px 12px", borderRadius: "50px", fontSize: "12px", fontWeight: "600" }}>
-                            {c.count} booking{c.count > 1 ? "s" : ""}
-                          </span>
-                        </td>
-                        <td style={{ ...tdStyle, fontWeight: "700", color: "#16a34a" }}>
-                          Rs. {Number(c.spent).toLocaleString()}
-                        </td>
+                      <tr key={i} onMouseEnter={e => e.currentTarget.style.background = "var(--gray-50)"} onMouseLeave={e => e.currentTarget.style.background = "white"}>
+                        <td style={tdStyle}><span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "28px", height: "28px", borderRadius: "50%", background: i === 0 ? "#fef9c3" : i === 1 ? "#f3f4f6" : i === 2 ? "#fef2f2" : "var(--gray-50)", color: i === 0 ? "#ca8a04" : i === 1 ? "#6b7280" : i === 2 ? "#dc2626" : "var(--gray-400)", fontSize: "13px", fontWeight: "700" }}>{i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}</span></td>
+                        <td style={tdStyle}><div style={{ display: "flex", alignItems: "center", gap: "10px" }}><div style={{ width: "32px", height: "32px", borderRadius: "50%", background: "var(--green-600)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", fontWeight: "700", color: "white", flexShrink: 0 }}>{c.name[0]?.toUpperCase()}</div><span style={{ fontWeight: "500", color: "var(--gray-800)" }}>{c.name}</span></div></td>
+                        <td style={tdStyle}><span style={{ background: "var(--green-50)", color: "var(--green-700)", padding: "3px 12px", borderRadius: "50px", fontSize: "12px", fontWeight: "600" }}>{c.count} booking{c.count > 1 ? "s" : ""}</span></td>
+                        <td style={{ ...tdStyle, fontWeight: "700", color: "#16a34a" }}>Rs. {Number(c.spent).toLocaleString()}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1186,9 +1142,7 @@ export default function AdminDashboard() {
               ))}
             </div>
             <div style={{ background: "white", borderRadius: "14px", border: "1px solid var(--gray-100)", padding: "18px 20px", marginBottom: "20px", boxShadow: "0 2px 6px rgba(0,0,0,0.04)", display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "center" }}>
-              <input type="text" placeholder="🔍 Search by name or email..." value={modSearch} onChange={e => setModSearch(e.target.value)}
-                style={{ flex: 1, minWidth: "200px", padding: "9px 14px", border: "1.5px solid var(--gray-200)", borderRadius: "50px", fontSize: "13px", fontFamily: "'DM Sans', sans-serif", outline: "none", color: "var(--gray-700)" }}
-                onFocus={e => e.target.style.borderColor = "#16a34a"} onBlur={e => e.target.style.borderColor = "var(--gray-200)"} />
+              <input type="text" placeholder="🔍 Search by name or email..." value={modSearch} onChange={e => setModSearch(e.target.value)} style={{ flex: 1, minWidth: "200px", padding: "9px 14px", border: "1.5px solid var(--gray-200)", borderRadius: "50px", fontSize: "13px", fontFamily: "'DM Sans', sans-serif", outline: "none", color: "var(--gray-700)" }} onFocus={e => e.target.style.borderColor = "#16a34a"} onBlur={e => e.target.style.borderColor = "var(--gray-200)"} />
               <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
                 {[{ key: "all", label: "All" }, { key: "active", label: "✅ Active" }, { key: "banned", label: "🚫 Banned" }, { key: "suspended", label: "⏸️ Suspended" }, { key: "flagged", label: "🚩 Flagged" }, { key: "admin", label: "👑 Admins" }].map(f => (
                   <button key={f.key} onClick={() => setModFilter(f.key)} style={{ padding: "7px 14px", borderRadius: "50px", fontSize: "12px", fontWeight: "600", border: modFilter === f.key ? "2px solid #16a34a" : "1.5px solid var(--gray-200)", background: modFilter === f.key ? "#f0fdf4" : "white", color: modFilter === f.key ? "#16a34a" : "var(--gray-600)", cursor: "pointer", transition: "all 0.15s" }}>{f.label}</button>
@@ -1214,9 +1168,7 @@ export default function AdminDashboard() {
                     >
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "14px" }}>
                         <div style={{ display: "flex", alignItems: "flex-start", gap: "14px", flex: 1, minWidth: "200px" }}>
-                          <div style={{ width: "46px", height: "46px", borderRadius: "50%", flexShrink: 0, background: u.isBanned ? "#dc2626" : u.role === "admin" ? "#1d4ed8" : "#16a34a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px", fontWeight: "700", color: "white" }}>
-                            {(u.name || "U")[0].toUpperCase()}
-                          </div>
+                          <div style={{ width: "46px", height: "46px", borderRadius: "50%", flexShrink: 0, background: u.isBanned ? "#dc2626" : u.role === "admin" ? "#1d4ed8" : "#16a34a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px", fontWeight: "700", color: "white" }}>{(u.name || "U")[0].toUpperCase()}</div>
                           <div style={{ flex: 1 }}>
                             <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "3px" }}>
                               <span style={{ fontSize: "15px", fontWeight: "700", color: "var(--gray-800)" }}>{u.name}{isCurrentAdmin && <span style={{ fontSize: "11px", color: "#9ca3af", fontWeight: "400", marginLeft: "6px" }}>(you)</span>}</span>
@@ -1357,14 +1309,7 @@ export default function AdminDashboard() {
                     <tr><td colSpan="5" style={{ ...tdStyle, textAlign: "center", padding: "40px", color: "var(--gray-400)" }}>No users found</td></tr>
                   ) : users.map((u) => (
                     <tr key={u._id} onMouseEnter={e => e.currentTarget.style.background = "var(--gray-50)"} onMouseLeave={e => e.currentTarget.style.background = "white"}>
-                      <td style={tdStyle}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                          <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: u.role === "admin" ? "#d97706" : "var(--green-600)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", fontWeight: "700", color: "white", flexShrink: 0 }}>
-                            {(u.name || "U")[0].toUpperCase()}
-                          </div>
-                          <span style={{ fontWeight: "500", color: "var(--gray-800)" }}>{u.name}</span>
-                        </div>
-                      </td>
+                      <td style={tdStyle}><div style={{ display: "flex", alignItems: "center", gap: "10px" }}><div style={{ width: "32px", height: "32px", borderRadius: "50%", background: u.role === "admin" ? "#d97706" : "var(--green-600)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", fontWeight: "700", color: "white", flexShrink: 0 }}>{(u.name || "U")[0].toUpperCase()}</div><span style={{ fontWeight: "500", color: "var(--gray-800)" }}>{u.name}</span></div></td>
                       <td style={{ ...tdStyle, color: "var(--gray-500)" }}>{u.email}</td>
                       <td style={tdStyle}><span style={{ background: u.role === "admin" ? "#fef3c7" : "var(--gray-100)", color: u.role === "admin" ? "#d97706" : "var(--gray-600)", padding: "3px 12px", borderRadius: "50px", fontSize: "12px", fontWeight: "600", textTransform: "capitalize" }}>{u.role || "traveler"}</span></td>
                       <td style={{ ...tdStyle, color: "var(--gray-500)" }}>{u.createdAt ? new Date(u.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "N/A"}</td>
@@ -1400,7 +1345,7 @@ export default function AdminDashboard() {
               ) : (
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead><tr>{["Tour", "Location", "Category", "Price", "Seats", "Actions"].map(h => <th key={h} style={thStyle}>{h}</th>)}</tr></thead>
+                    <thead><tr>{["Tour", "Location", "Category", "Price", "Seats", "360°", "Actions"].map(h => <th key={h} style={thStyle}>{h}</th>)}</tr></thead>
                     <tbody>
                       {tours.map((t) => (
                         <tr key={t._id} onMouseEnter={e => e.currentTarget.style.background = "var(--gray-50)"} onMouseLeave={e => e.currentTarget.style.background = "white"}>
@@ -1417,6 +1362,16 @@ export default function AdminDashboard() {
                           <td style={tdStyle}><span style={{ background: "var(--green-50)", color: "var(--green-700)", padding: "3px 12px", borderRadius: "50px", fontSize: "12px", fontWeight: "600" }}>{t.category || "Tour"}</span></td>
                           <td style={{ ...tdStyle, fontWeight: "700", color: "#16a34a" }}>Rs. {Number(t.price || 0).toLocaleString()}</td>
                           <td style={{ ...tdStyle, textAlign: "center" }}><span style={{ fontSize: "12px", fontWeight: "600", color: (t.availableSeats || 0) <= 5 ? "#dc2626" : "var(--gray-600)" }}>{t.availableSeats ?? "—"}</span></td>
+                          {/* NEW: show if tour has virtual scenes */}
+                          <td style={{ ...tdStyle, textAlign: "center" }}>
+                            {t.virtualTourScenes?.filter(s => s.imageUrl).length > 0 ? (
+                              <span style={{ fontSize: "11px", background: "#f0fdf4", color: "#16a34a", border: "1px solid #bbf7d0", padding: "2px 8px", borderRadius: "50px", fontWeight: "600" }}>
+                                🌐 {t.virtualTourScenes.filter(s => s.imageUrl).length}
+                              </span>
+                            ) : (
+                              <span style={{ fontSize: "11px", color: "var(--gray-300)" }}>—</span>
+                            )}
+                          </td>
                           <td style={tdStyle}>
                             <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
                               <Link to={`/tours/${t._id}`} target="_blank" style={{ background: "var(--green-50)", color: "var(--green-700)", border: "1.5px solid var(--green-200)", padding: "5px 10px", borderRadius: "50px", fontSize: "11px", fontWeight: "500", textDecoration: "none", whiteSpace: "nowrap" }}>👁️ View</Link>
