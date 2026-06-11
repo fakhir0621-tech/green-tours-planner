@@ -424,7 +424,7 @@ export default function AdminDashboard() {
     try { return JSON.parse(localStorage.getItem("gt_blocked_users") || "[]"); } catch { return []; }
   });
 
-  // ---- NEW: KB STATE ----
+  // ---- KB STATE ----
   const [kb, setKb]                 = useState([]);
   const [kbLoading, setKbLoading]   = useState(false);
   const [kbNewQ, setKbNewQ]         = useState("");
@@ -435,7 +435,7 @@ export default function AdminDashboard() {
   const [kbSaving, setKbSaving]     = useState(false);
   const [kbMsg, setKbMsg]           = useState("");
 
-  // ---- NEW: AI MODEL STATE ----
+  // ---- AI MODEL STATE ----
   const [aiModel, setAiModel]               = useState("llama-3.3-70b-versatile");
   const [aiTemp, setAiTemp]                 = useState(0.7);
   const [aiMaxTokens, setAiMaxTokens]       = useState(500);
@@ -446,11 +446,20 @@ export default function AdminDashboard() {
   const [aiTestReply, setAiTestReply]       = useState("");
   const [aiTesting, setAiTesting]           = useState(false);
 
+  // ---- SUPPORT MESSAGES STATE (NEW) ----
+  const [supportMessages, setSupportMessages] = useState([]);
+  const [supportLoading, setSupportLoading]   = useState(false);
+  const [replyingId, setReplyingId]           = useState(null);
+  const [replyText, setReplyText]             = useState("");
+  const [replyTarget, setReplyTarget]         = useState(null);
+  const [supportMsg, setSupportMsg]           = useState("");
+
   useEffect(() => {
     if (!user)                 { navigate("/login"); return; }
     if (user.role !== "admin") { navigate("/");      return; }
     fetchAll();
     fetchKB();
+    fetchSupport(); // NEW
     window.scrollTo(0, 0);
   }, [user, navigate]);
 
@@ -463,6 +472,21 @@ export default function AdminDashboard() {
       setKb(data.kb || []);
     } catch {}
     finally { setKbLoading(false); }
+  };
+
+  // ---- FETCH SUPPORT MESSAGES (NEW) ----
+  const fetchSupport = async () => {
+    setSupportLoading(true);
+    try {
+      const res = await fetch(`${BASE_URL}/support/all`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSupportMessages(Array.isArray(data) ? data : []);
+      }
+    } catch {}
+    finally { setSupportLoading(false); }
   };
 
   const fetchAll = async () => {
@@ -536,7 +560,7 @@ export default function AdminDashboard() {
     setModAction(null);
   };
 
-  // ---- NEW: KB ACTIONS ----
+  // ---- KB ACTIONS ----
   const kbAddEntry = async () => {
     if (!kbNewQ.trim() || !kbNewA.trim()) return;
     setKbSaving(true);
@@ -577,7 +601,7 @@ export default function AdminDashboard() {
     } catch { setKbMsg("❌ Failed to delete."); setTimeout(() => setKbMsg(""), 3000); }
   };
 
-  // ---- NEW: AI TEST ----
+  // ---- AI TEST ----
   const handleAiTest = async () => {
     if (!aiTestInput.trim()) return;
     setAiTesting(true); setAiTestReply("");
@@ -598,6 +622,9 @@ export default function AdminDashboard() {
   const suspendedCount   = users.filter(u => u.isSuspended && !u.isBanned).length;
   const flaggedCount     = users.filter(u => u.isFlagged && !u.isBanned).length;
   const moderationAlerts = bannedCount + suspendedCount + flaggedCount;
+
+  // ---- Support open count for tab badge (NEW) ----
+  const openSupportCount = supportMessages.filter(m => m.status === "open").length;
 
   const analyticsData = (() => {
     const confirmed = bookings.filter(b => (b.status || "").toLowerCase() === "confirmed").length;
@@ -632,9 +659,10 @@ export default function AdminDashboard() {
     { key: "tours",      icon: "🗺️", label: `Tours (${tours.length})` },
     { key: "bookings",   icon: "📋", label: `Bookings (${bookings.length})` },
     { key: "reviews",    icon: "⭐", label: `Reviews (${allReviews.length})` },
-    // ---- NEW TABS ----
     { key: "kb",         icon: "🧠", label: `KB (${kb.length})` },
     { key: "ai",         icon: "🤖", label: "AI Model" },
+    // ---- NEW: Support tab ----
+    { key: "support",    icon: "💬", label: `Support${openSupportCount > 0 ? ` (${openSupportCount})` : ""}` },
   ];
 
   const thStyle = { padding: "12px 16px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "var(--gray-400)", letterSpacing: "1px", textTransform: "uppercase", borderBottom: "1px solid var(--gray-100)", background: "var(--gray-50)", whiteSpace: "nowrap" };
@@ -693,6 +721,8 @@ export default function AdminDashboard() {
               {tab.icon} {tab.label}
               {tab.key === "payments" && pendingPayments.length > 0 && <span style={{ position: "absolute", top: "8px", right: "8px", width: "7px", height: "7px", borderRadius: "50%", background: "#dc2626" }} />}
               {tab.key === "moderation" && moderationAlerts > 0 && <span style={{ position: "absolute", top: "8px", right: "8px", width: "7px", height: "7px", borderRadius: "50%", background: "#d97706" }} />}
+              {/* NEW: support dot indicator */}
+              {tab.key === "support" && openSupportCount > 0 && <span style={{ position: "absolute", top: "8px", right: "8px", width: "7px", height: "7px", borderRadius: "50%", background: "#0891b2" }} />}
             </button>
           ))}
         </div>
@@ -721,6 +751,13 @@ export default function AdminDashboard() {
               <div style={{ background: "#fef9c3", border: "1px solid #fde68a", borderRadius: "12px", padding: "16px 20px", marginBottom: "28px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "10px" }}><span style={{ fontSize: "20px" }}>⏳</span><div><p style={{ fontSize: "14px", fontWeight: "700", color: "#92400e" }}>{pendingPayments.length} payment{pendingPayments.length > 1 ? "s" : ""} awaiting verification</p><p style={{ fontSize: "12px", color: "#a16207" }}>Review screenshots and approve or reject bookings</p></div></div>
                 <button onClick={() => setActiveTab("payments")} style={{ background: "#ca8a04", color: "white", border: "none", padding: "8px 20px", borderRadius: "50px", fontSize: "13px", fontWeight: "600", cursor: "pointer" }}>Verify Now →</button>
+              </div>
+            )}
+            {/* NEW: Support alert on overview */}
+            {openSupportCount > 0 && (
+              <div style={{ background: "#e0f2fe", border: "1px solid #bae6fd", borderRadius: "12px", padding: "16px 20px", marginBottom: "28px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}><span style={{ fontSize: "20px" }}>💬</span><div><p style={{ fontSize: "14px", fontWeight: "700", color: "#0369a1" }}>{openSupportCount} support message{openSupportCount > 1 ? "s" : ""} awaiting reply</p><p style={{ fontSize: "12px", color: "#0284c7" }}>Users are waiting for responses to their contact messages</p></div></div>
+                <button onClick={() => setActiveTab("support")} style={{ background: "#0891b2", color: "white", border: "none", padding: "8px 20px", borderRadius: "50px", fontSize: "13px", fontWeight: "600", cursor: "pointer" }}>Reply Now →</button>
               </div>
             )}
             <div style={{ background: "white", border: "1px solid var(--gray-100)", borderRadius: "16px", overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
@@ -1059,12 +1096,9 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* ============================================================ */}
-        {/* ---- NEW: KNOWLEDGE BASE TAB ---- */}
-        {/* ============================================================ */}
+        {/* ---- KNOWLEDGE BASE TAB ---- */}
         {activeTab === "kb" && (
           <div>
-            {/* HEADER */}
             <div style={{ background: "white", border: "1px solid var(--gray-100)", borderRadius: "16px", padding: "24px 28px", marginBottom: "20px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "12px", marginBottom: "20px" }}>
                 <div>
@@ -1076,14 +1110,11 @@ export default function AdminDashboard() {
                   <button onClick={fetchKB} style={{ background: "var(--gray-50)", color: "var(--gray-600)", border: "1px solid var(--gray-200)", padding: "5px 14px", borderRadius: "50px", fontSize: "12px", fontWeight: "500", cursor: "pointer" }}>🔄 Refresh</button>
                 </div>
               </div>
-
               {kbMsg && (
                 <div style={{ background: kbMsg.startsWith("✅") ? "#f0fdf4" : "#fef2f2", border: `1px solid ${kbMsg.startsWith("✅") ? "#bbf7d0" : "#fecaca"}`, color: kbMsg.startsWith("✅") ? "#16a34a" : "#dc2626", padding: "10px 14px", borderRadius: "8px", fontSize: "13px", marginBottom: "16px" }}>
                   {kbMsg}
                 </div>
               )}
-
-              {/* ADD NEW ENTRY */}
               <div style={{ background: "#f9fafb", borderRadius: "12px", padding: "20px", border: "1px solid var(--gray-100)" }}>
                 <p style={{ fontSize: "14px", fontWeight: "600", color: "var(--gray-700)", marginBottom: "14px" }}>➕ Add New FAQ Entry</p>
                 <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -1102,8 +1133,6 @@ export default function AdminDashboard() {
                 </div>
               </div>
             </div>
-
-            {/* EXISTING ENTRIES */}
             {kbLoading ? (
               <div style={{ textAlign: "center", padding: "40px", background: "white", borderRadius: "16px", border: "1px solid var(--gray-100)" }}>
                 <div style={{ width: "32px", height: "32px", border: "3px solid var(--green-100)", borderTop: "3px solid var(--green-500)", borderRadius: "50%", margin: "0 auto 12px", animation: "spin 0.8s linear infinite" }} />
@@ -1121,7 +1150,6 @@ export default function AdminDashboard() {
                   <div key={index} style={{ background: "white", border: "1px solid var(--gray-100)", borderRadius: "14px", padding: "20px 22px", boxShadow: "0 2px 6px rgba(0,0,0,0.04)", transition: "box-shadow 0.2s" }}
                     onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.08)"} onMouseLeave={e => e.currentTarget.style.boxShadow = "0 2px 6px rgba(0,0,0,0.04)"}>
                     {kbEditIndex === index ? (
-                      // EDIT MODE
                       <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                         <div>
                           <label style={labelBase}>Question</label>
@@ -1137,7 +1165,6 @@ export default function AdminDashboard() {
                         </div>
                       </div>
                     ) : (
-                      // VIEW MODE
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "16px" }}>
                         <div style={{ flex: 1 }}>
                           <div style={{ display: "flex", alignItems: "flex-start", gap: "8px", marginBottom: "8px" }}>
@@ -1162,28 +1189,21 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* ============================================================ */}
-        {/* ---- NEW: AI MODEL TAB ---- */}
-        {/* ============================================================ */}
+        {/* ---- AI MODEL TAB ---- */}
         {activeTab === "ai" && (
           <div>
-            {/* HEADER */}
             <div style={{ background: "linear-gradient(135deg, #14532d, #052e16)", borderRadius: "16px", padding: "28px 32px", marginBottom: "24px", position: "relative", overflow: "hidden" }}>
               <div style={{ position: "absolute", top: "-40px", right: "-40px", width: "160px", height: "160px", borderRadius: "50%", background: "rgba(255,255,255,0.04)" }} />
               <p style={{ fontSize: "11px", letterSpacing: "3px", color: "#4ade80", fontWeight: "600", textTransform: "uppercase", marginBottom: "8px" }}>AI CONFIGURATION</p>
               <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: "22px", fontWeight: "700", color: "white", marginBottom: "6px" }}>🤖 AI Model Settings</h2>
               <p style={{ color: "rgba(255,255,255,0.55)", fontSize: "13px" }}>Configure which Llama model powers your chatbot and test it live. Changes here affect the chatbot for all users immediately.</p>
             </div>
-
             {aiMsg && (
               <div style={{ background: aiMsg.startsWith("✅") ? "#f0fdf4" : "#fef2f2", border: `1px solid ${aiMsg.startsWith("✅") ? "#bbf7d0" : "#fecaca"}`, color: aiMsg.startsWith("✅") ? "#16a34a" : "#dc2626", padding: "12px 16px", borderRadius: "10px", fontSize: "13px", marginBottom: "20px", fontWeight: "500" }}>
                 {aiMsg}
               </div>
             )}
-
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginBottom: "20px" }}>
-
-              {/* MODEL SELECTION */}
               <div style={{ background: "white", border: "1px solid var(--gray-100)", borderRadius: "16px", padding: "24px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
                 <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: "17px", fontWeight: "700", color: "var(--gray-800)", marginBottom: "6px" }}>🧬 Select Model</h3>
                 <p style={{ fontSize: "12px", color: "var(--gray-400)", marginBottom: "20px" }}>All models run on Groq — free and fast. Select based on your needs.</p>
@@ -1205,21 +1225,12 @@ export default function AdminDashboard() {
                     </div>
                   ))}
                 </div>
-
                 <div style={{ marginTop: "16px", padding: "12px 14px", background: "#f0fdf4", borderRadius: "8px", border: "1px solid #bbf7d0" }}>
-                  <p style={{ fontSize: "12px", color: "#16a34a", fontWeight: "600" }}>
-                    Currently active: {GROQ_MODELS.find(m => m.id === aiModel)?.label || aiModel}
-                  </p>
-                  <p style={{ fontSize: "11px", color: "#4ade80", marginTop: "2px" }}>
-                    ⚠️ Note: To permanently change the model, update <code style={{ background: "#dcfce7", padding: "1px 4px", borderRadius: "3px" }}>chatController.js</code> model field. This selector shows your preference.
-                  </p>
+                  <p style={{ fontSize: "12px", color: "#16a34a", fontWeight: "600" }}>Currently active: {GROQ_MODELS.find(m => m.id === aiModel)?.label || aiModel}</p>
+                  <p style={{ fontSize: "11px", color: "#4ade80", marginTop: "2px" }}>⚠️ Note: To permanently change the model, update <code style={{ background: "#dcfce7", padding: "1px 4px", borderRadius: "3px" }}>chatController.js</code> model field. This selector shows your preference.</p>
                 </div>
               </div>
-
-              {/* PARAMETERS */}
               <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-
-                {/* TEMPERATURE */}
                 <div style={{ background: "white", border: "1px solid var(--gray-100)", borderRadius: "16px", padding: "22px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
                   <h3 style={{ fontSize: "15px", fontWeight: "700", color: "var(--gray-800)", marginBottom: "4px" }}>🌡️ Temperature: <span style={{ color: "#16a34a" }}>{aiTemp}</span></h3>
                   <p style={{ fontSize: "12px", color: "var(--gray-400)", marginBottom: "14px" }}>Lower = more focused. Higher = more creative. Recommended: 0.6–0.8</p>
@@ -1229,8 +1240,6 @@ export default function AdminDashboard() {
                     <span style={{ fontSize: "11px", color: "var(--gray-400)" }}>1.0 — Creative</span>
                   </div>
                 </div>
-
-                {/* MAX TOKENS */}
                 <div style={{ background: "white", border: "1px solid var(--gray-100)", borderRadius: "16px", padding: "22px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
                   <h3 style={{ fontSize: "15px", fontWeight: "700", color: "var(--gray-800)", marginBottom: "4px" }}>📏 Max Response Length: <span style={{ color: "#16a34a" }}>{aiMaxTokens} tokens</span></h3>
                   <p style={{ fontSize: "12px", color: "var(--gray-400)", marginBottom: "14px" }}>~{Math.round(aiMaxTokens * 0.75)} words. 300–600 is ideal for chat.</p>
@@ -1240,17 +1249,10 @@ export default function AdminDashboard() {
                     ))}
                   </div>
                 </div>
-
-                {/* CURRENT SETTINGS SUMMARY */}
                 <div style={{ background: "white", border: "1px solid var(--gray-100)", borderRadius: "16px", padding: "22px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
                   <h3 style={{ fontSize: "15px", fontWeight: "700", color: "var(--gray-800)", marginBottom: "14px" }}>📋 Current Config</h3>
                   <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                    {[
-                      { label: "Model", val: GROQ_MODELS.find(m => m.id === aiModel)?.label || aiModel },
-                      { label: "Temperature", val: aiTemp },
-                      { label: "Max Tokens", val: `${aiMaxTokens} (~${Math.round(aiMaxTokens * 0.75)} words)` },
-                      { label: "KB Entries", val: `${kb.length} entries active` },
-                    ].map(item => (
+                    {[{ label: "Model", val: GROQ_MODELS.find(m => m.id === aiModel)?.label || aiModel }, { label: "Temperature", val: aiTemp }, { label: "Max Tokens", val: `${aiMaxTokens} (~${Math.round(aiMaxTokens * 0.75)} words)` }, { label: "KB Entries", val: `${kb.length} entries active` }].map(item => (
                       <div key={item.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid var(--gray-50)" }}>
                         <span style={{ fontSize: "12px", color: "var(--gray-500)" }}>{item.label}</span>
                         <span style={{ fontSize: "12px", fontWeight: "600", color: "var(--gray-800)" }}>{item.val}</span>
@@ -1263,50 +1265,24 @@ export default function AdminDashboard() {
                 </div>
               </div>
             </div>
-
-            {/* CUSTOM SYSTEM PROMPT */}
             <div style={{ background: "white", border: "1px solid var(--gray-100)", borderRadius: "16px", padding: "24px", marginBottom: "20px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
               <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: "17px", fontWeight: "700", color: "var(--gray-800)", marginBottom: "4px" }}>📝 Custom System Prompt Override</h3>
               <p style={{ fontSize: "13px", color: "var(--gray-400)", marginBottom: "16px" }}>Optionally add extra instructions appended to the main system prompt. Useful for seasonal campaigns, special promotions, or tone adjustments. Leave empty to use defaults.</p>
-              <textarea
-                value={aiSystemPrompt}
-                onChange={e => setAiSystemPrompt(e.target.value)}
-                placeholder="e.g. For the next 2 weeks, always mention our Eid Special 20% discount on all tours. When users ask about pricing, emphasize the limited-time offer..."
-                rows={5}
-                style={{ ...inputBase, resize: "vertical", lineHeight: "1.7" }}
-                onFocus={e => e.target.style.borderColor = "#16a34a"}
-                onBlur={e => e.target.style.borderColor = "#e5e7eb"}
-              />
+              <textarea value={aiSystemPrompt} onChange={e => setAiSystemPrompt(e.target.value)} placeholder="e.g. For the next 2 weeks, always mention our Eid Special 20% discount on all tours..." rows={5} style={{ ...inputBase, resize: "vertical", lineHeight: "1.7" }} onFocus={e => e.target.style.borderColor = "#16a34a"} onBlur={e => e.target.style.borderColor = "#e5e7eb"} />
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "10px" }}>
                 <p style={{ fontSize: "11px", color: "var(--gray-400)" }}>{aiSystemPrompt.length} characters · Add this to your KB entries instead for permanent effect</p>
-                {aiSystemPrompt && (
-                  <button onClick={() => setAiSystemPrompt("")} style={{ background: "none", color: "#9ca3af", border: "1px solid #e5e7eb", padding: "4px 12px", borderRadius: "50px", fontSize: "11px", cursor: "pointer" }}>Clear</button>
-                )}
+                {aiSystemPrompt && <button onClick={() => setAiSystemPrompt("")} style={{ background: "none", color: "#9ca3af", border: "1px solid #e5e7eb", padding: "4px 12px", borderRadius: "50px", fontSize: "11px", cursor: "pointer" }}>Clear</button>}
               </div>
             </div>
-
-            {/* LIVE CHATBOT TESTER */}
             <div style={{ background: "white", border: "1px solid var(--gray-100)", borderRadius: "16px", padding: "24px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
               <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: "17px", fontWeight: "700", color: "var(--gray-800)", marginBottom: "4px" }}>🧪 Live Chatbot Tester</h3>
               <p style={{ fontSize: "13px", color: "var(--gray-400)", marginBottom: "20px" }}>Send a test message to see exactly how the chatbot responds right now. Uses your live backend — no mock data.</p>
-
               <div style={{ display: "flex", gap: "10px", marginBottom: "16px" }}>
-                <input
-                  type="text"
-                  value={aiTestInput}
-                  onChange={e => setAiTestInput(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && !aiTesting && handleAiTest()}
-                  placeholder="e.g. What tours do you have under Rs. 20,000?"
-                  style={{ ...inputBase, flex: 1 }}
-                  onFocus={e => e.target.style.borderColor = "#16a34a"}
-                  onBlur={e => e.target.style.borderColor = "#e5e7eb"}
-                />
+                <input type="text" value={aiTestInput} onChange={e => setAiTestInput(e.target.value)} onKeyDown={e => e.key === "Enter" && !aiTesting && handleAiTest()} placeholder="e.g. What tours do you have under Rs. 20,000?" style={{ ...inputBase, flex: 1 }} onFocus={e => e.target.style.borderColor = "#16a34a"} onBlur={e => e.target.style.borderColor = "#e5e7eb"} />
                 <button onClick={handleAiTest} disabled={aiTesting || !aiTestInput.trim()} style={{ background: aiTesting || !aiTestInput.trim() ? "#e5e7eb" : "#16a34a", color: aiTesting || !aiTestInput.trim() ? "#9ca3af" : "white", border: "none", padding: "10px 24px", borderRadius: "50px", fontSize: "13px", fontWeight: "600", cursor: aiTesting || !aiTestInput.trim() ? "not-allowed" : "pointer", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "8px" }}>
                   {aiTesting ? (<><div style={{ width: "14px", height: "14px", border: "2px solid rgba(255,255,255,0.4)", borderTop: "2px solid #9ca3af", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />Testing...</>) : "🚀 Test Bot"}
                 </button>
               </div>
-
-              {/* QUICK TEST PROMPTS */}
               <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "16px" }}>
                 <span style={{ fontSize: "11px", color: "var(--gray-400)", alignSelf: "center", marginRight: "4px" }}>Quick:</span>
                 {["What tours do you offer?", "How do I book?", "What is your cancellation policy?", "Suggest a tour under Rs. 30,000", "Do you have group discounts?"].map(q => (
@@ -1317,13 +1293,9 @@ export default function AdminDashboard() {
                   </button>
                 ))}
               </div>
-
-              {/* RESPONSE */}
               {aiTesting && (
                 <div style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "12px", padding: "20px", display: "flex", alignItems: "center", gap: "12px" }}>
-                  <div style={{ display: "flex", gap: "4px" }}>
-                    {[0, 1, 2].map(i => (<span key={i} style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#16a34a", display: "inline-block", animation: "bounce-dot 1.2s infinite", animationDelay: `${i * 0.2}s` }} />))}
-                  </div>
+                  <div style={{ display: "flex", gap: "4px" }}>{[0, 1, 2].map(i => (<span key={i} style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#16a34a", display: "inline-block", animation: "bounce-dot 1.2s infinite", animationDelay: `${i * 0.2}s` }} />))}</div>
                   <span style={{ fontSize: "13px", color: "var(--gray-400)" }}>Bot is thinking...</span>
                 </div>
               )}
@@ -1349,6 +1321,212 @@ export default function AdminDashboard() {
             </div>
           </div>
         )}
+
+        {/* ============================================================ */}
+        {/* ---- NEW: SUPPORT MESSAGES TAB ---- */}
+        {/* ============================================================ */}
+        {activeTab === "support" && (
+          <div>
+            <div style={{ background: "white", border: "1px solid var(--gray-100)", borderRadius: "16px", padding: "22px 28px", marginBottom: "20px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
+              <div>
+                <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: "20px", fontWeight: "700", color: "var(--gray-800)", marginBottom: "4px" }}>💬 Support Messages</h3>
+                <p style={{ fontSize: "13px", color: "var(--gray-400)" }}>Messages submitted through the Contact page by registered users.</p>
+              </div>
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+                <span style={{ background: "#fef9c3", color: "#92400e", padding: "5px 14px", borderRadius: "50px", fontSize: "12px", fontWeight: "600", border: "1px solid #fde68a" }}>
+                  ⏳ {supportMessages.filter(m => m.status === "open").length} open
+                </span>
+                <span style={{ background: "#dcfce7", color: "#16a34a", padding: "5px 14px", borderRadius: "50px", fontSize: "12px", fontWeight: "600", border: "1px solid #86efac" }}>
+                  ✅ {supportMessages.filter(m => m.status === "replied").length} replied
+                </span>
+                <button onClick={fetchSupport} style={{ background: "var(--gray-50)", color: "var(--gray-600)", border: "1px solid var(--gray-200)", padding: "5px 14px", borderRadius: "50px", fontSize: "12px", fontWeight: "500", cursor: "pointer" }}>🔄 Refresh</button>
+              </div>
+            </div>
+
+            {supportMsg && (
+              <div style={{ background: supportMsg.startsWith("✅") ? "#f0fdf4" : "#fef2f2", border: `1px solid ${supportMsg.startsWith("✅") ? "#bbf7d0" : "#fecaca"}`, color: supportMsg.startsWith("✅") ? "#16a34a" : "#dc2626", padding: "12px 16px", borderRadius: "10px", fontSize: "13px", marginBottom: "20px", fontWeight: "500" }}>
+                {supportMsg}
+              </div>
+            )}
+
+            {supportLoading ? (
+              <div style={{ textAlign: "center", padding: "60px 0", background: "white", borderRadius: "16px", border: "1px solid var(--gray-100)" }}>
+                <div style={{ width: "36px", height: "36px", border: "3px solid var(--green-100)", borderTop: "3px solid var(--green-500)", borderRadius: "50%", margin: "0 auto 12px", animation: "spin 0.8s linear infinite" }} />
+                <p style={{ color: "var(--gray-400)" }}>Loading messages...</p>
+              </div>
+            ) : supportMessages.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "60px 0", background: "white", borderRadius: "16px", border: "1px solid var(--gray-100)" }}>
+                <div style={{ fontSize: "48px", marginBottom: "12px" }}>💬</div>
+                <p style={{ color: "var(--gray-400)", fontSize: "15px" }}>No support messages yet.</p>
+                <p style={{ color: "var(--gray-300)", fontSize: "13px", marginTop: "6px" }}>Messages submitted through the Contact page will appear here.</p>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                {supportMessages.map(msg => {
+                  const STATUS_BADGE = {
+                    open:    { label: "Open",    bg: "#fef9c3", color: "#92400e", border: "#fde68a", icon: "⏳" },
+                    replied: { label: "Replied", bg: "#dcfce7", color: "#16a34a", border: "#86efac", icon: "✅" },
+                    closed:  { label: "Closed",  bg: "#f3f4f6", color: "#6b7280", border: "#e5e7eb", icon: "🔒" },
+                    blocked: { label: "Blocked", bg: "#fee2e2", color: "#dc2626", border: "#fecaca", icon: "🚫" },
+                  };
+                  const s = STATUS_BADGE[msg.status] || STATUS_BADGE.open;
+                  const isReplying = replyTarget === msg._id;
+
+                  return (
+                    <div key={msg._id} style={{ background: "white", border: `1.5px solid ${msg.status === "open" ? "#fde68a" : msg.status === "blocked" ? "#fecaca" : "var(--gray-100)"}`, borderRadius: "14px", overflow: "hidden", boxShadow: msg.status === "open" ? "0 4px 16px rgba(202,138,4,0.1)" : "0 2px 8px rgba(0,0,0,0.05)", transition: "box-shadow 0.2s" }}>
+                      {/* MESSAGE HEADER */}
+                      <div style={{ padding: "18px 22px", borderBottom: "1px solid var(--gray-50)" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "12px" }}>
+                          <div style={{ display: "flex", alignItems: "flex-start", gap: "12px", flex: 1, minWidth: "200px" }}>
+                            <div style={{ width: "40px", height: "40px", borderRadius: "50%", background: msg.status === "blocked" ? "#dc2626" : "var(--green-600)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", fontWeight: "700", color: "white", flexShrink: 0 }}>
+                              {(msg.name || "U")[0].toUpperCase()}
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "3px" }}>
+                                <span style={{ fontSize: "15px", fontWeight: "700", color: "var(--gray-800)" }}>{msg.name}</span>
+                                <span style={{ fontSize: "11px", fontWeight: "700", padding: "2px 9px", borderRadius: "50px", background: s.bg, color: s.color, border: `1px solid ${s.border}` }}>
+                                  {s.icon} {s.label}
+                                </span>
+                              </div>
+                              <p style={{ fontSize: "12px", color: "var(--gray-500)" }}>✉️ {msg.email}</p>
+                              {msg.subject && <p style={{ fontSize: "12px", color: "var(--gray-400)", fontStyle: "italic", marginTop: "2px" }}>Subject: "{msg.subject}"</p>}
+                              <p style={{ fontSize: "11px", color: "var(--gray-400)", marginTop: "3px" }}>
+                                {msg.createdAt ? new Date(msg.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}
+                              </p>
+                            </div>
+                          </div>
+                          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "flex-start", flexShrink: 0 }}>
+                            {msg.status === "open" && (
+                              <button
+                                onClick={() => { setReplyTarget(isReplying ? null : msg._id); setReplyText(""); }}
+                                style={{ background: isReplying ? "var(--gray-100)" : "#eff6ff", color: isReplying ? "var(--gray-600)" : "#1d4ed8", border: `1.5px solid ${isReplying ? "var(--gray-200)" : "#bfdbfe"}`, padding: "6px 14px", borderRadius: "50px", fontSize: "12px", fontWeight: "600", cursor: "pointer", whiteSpace: "nowrap" }}
+                                onMouseEnter={e => { if (!isReplying) { e.currentTarget.style.background = "#1d4ed8"; e.currentTarget.style.color = "white"; } }}
+                                onMouseLeave={e => { if (!isReplying) { e.currentTarget.style.background = "#eff6ff"; e.currentTarget.style.color = "#1d4ed8"; } }}
+                              >
+                                {isReplying ? "✕ Cancel" : "💬 Reply"}
+                              </button>
+                            )}
+                            {msg.status === "open" && (
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const res = await fetch(`${BASE_URL}/support/close/${msg._id}`, { method: "PUT", headers: { Authorization: `Bearer ${token}` } });
+                                    if (res.ok) { setSupportMessages(prev => prev.map(m => m._id === msg._id ? { ...m, status: "closed", isActive: false } : m)); setSupportMsg("✅ Message closed."); setTimeout(() => setSupportMsg(""), 3000); }
+                                  } catch { setSupportMsg("❌ Failed."); setTimeout(() => setSupportMsg(""), 3000); }
+                                }}
+                                style={{ background: "#f3f4f6", color: "#6b7280", border: "1.5px solid #e5e7eb", padding: "6px 14px", borderRadius: "50px", fontSize: "12px", fontWeight: "600", cursor: "pointer", whiteSpace: "nowrap" }}
+                                onMouseEnter={e => { e.currentTarget.style.background = "#6b7280"; e.currentTarget.style.color = "white"; }}
+                                onMouseLeave={e => { e.currentTarget.style.background = "#f3f4f6"; e.currentTarget.style.color = "#6b7280"; }}
+                              >
+                                🔒 Close
+                              </button>
+                            )}
+                            {msg.status !== "blocked" ? (
+                              <button
+                                onClick={async () => {
+                                  if (!window.confirm(`Block ${msg.name} from sending support messages?`)) return;
+                                  try {
+                                    const res = await fetch(`${BASE_URL}/support/block/${msg._id}`, { method: "PUT", headers: { Authorization: `Bearer ${token}` } });
+                                    if (res.ok) { setSupportMessages(prev => prev.map(m => m.user === msg.user ? { ...m, status: "blocked", isActive: false } : m)); setSupportMsg("✅ User blocked from messaging."); setTimeout(() => setSupportMsg(""), 3000); }
+                                  } catch { setSupportMsg("❌ Failed."); setTimeout(() => setSupportMsg(""), 3000); }
+                                }}
+                                style={{ background: "#fef2f2", color: "#dc2626", border: "1.5px solid #fecaca", padding: "6px 14px", borderRadius: "50px", fontSize: "12px", fontWeight: "600", cursor: "pointer", whiteSpace: "nowrap" }}
+                                onMouseEnter={e => { e.currentTarget.style.background = "#dc2626"; e.currentTarget.style.color = "white"; }}
+                                onMouseLeave={e => { e.currentTarget.style.background = "#fef2f2"; e.currentTarget.style.color = "#dc2626"; }}
+                              >
+                                🚫 Block User
+                              </button>
+                            ) : (
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const res = await fetch(`${BASE_URL}/support/unblock/${msg._id}`, { method: "PUT", headers: { Authorization: `Bearer ${token}` } });
+                                    if (res.ok) { setSupportMessages(prev => prev.map(m => m._id === msg._id ? { ...m, status: "closed" } : m)); setSupportMsg("✅ User unblocked."); setTimeout(() => setSupportMsg(""), 3000); }
+                                  } catch { setSupportMsg("❌ Failed."); setTimeout(() => setSupportMsg(""), 3000); }
+                                }}
+                                style={{ background: "#dcfce7", color: "#16a34a", border: "1.5px solid #86efac", padding: "6px 14px", borderRadius: "50px", fontSize: "12px", fontWeight: "600", cursor: "pointer", whiteSpace: "nowrap" }}
+                              >
+                                ✅ Unblock
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* MESSAGE BODY */}
+                      <div style={{ padding: "16px 22px" }}>
+                        <div style={{ background: "var(--gray-50)", borderRadius: "10px", padding: "14px 16px", marginBottom: msg.adminReply || isReplying ? "14px" : "0", border: "1px solid var(--gray-100)" }}>
+                          <p style={{ fontSize: "11px", fontWeight: "700", color: "var(--gray-400)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>User Message</p>
+                          <p style={{ fontSize: "14px", color: "var(--gray-700)", lineHeight: "1.75" }}>{msg.message}</p>
+                        </div>
+
+                        {msg.adminReply && !isReplying && (
+                          <div style={{ background: "#f0fdf4", borderRadius: "10px", padding: "14px 16px", border: "1.5px solid #bbf7d0" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px", flexWrap: "wrap", gap: "6px" }}>
+                              <p style={{ fontSize: "11px", fontWeight: "700", color: "#16a34a", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                                🌿 Admin Reply {msg.repliedBy ? `by ${msg.repliedBy}` : ""}
+                              </p>
+                              {msg.repliedAt && <p style={{ fontSize: "11px", color: "#4ade80" }}>{new Date(msg.repliedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</p>}
+                            </div>
+                            <p style={{ fontSize: "14px", color: "#166534", lineHeight: "1.7" }}>{msg.adminReply}</p>
+                            <p style={{ fontSize: "11px", color: msg.userReadReply ? "#4ade80" : "#ca8a04", marginTop: "8px" }}>
+                              {msg.userReadReply ? "✅ User has read this reply" : "⏳ User hasn't read this yet"}
+                            </p>
+                          </div>
+                        )}
+
+                        {isReplying && (
+                          <div style={{ background: "#f0fdf4", borderRadius: "10px", padding: "16px", border: "1.5px solid #bbf7d0" }}>
+                            <p style={{ fontSize: "12px", fontWeight: "700", color: "#16a34a", marginBottom: "10px", textTransform: "uppercase", letterSpacing: "0.5px" }}>✍️ Write Reply</p>
+                            <textarea
+                              value={replyText}
+                              onChange={e => setReplyText(e.target.value)}
+                              placeholder="Type your reply to the user..."
+                              rows={4}
+                              style={{ width: "100%", padding: "11px 14px", border: "1.5px solid #bbf7d0", borderRadius: "9px", fontSize: "14px", fontFamily: "'DM Sans', sans-serif", color: "#1f2937", background: "white", outline: "none", resize: "vertical", lineHeight: "1.7", boxSizing: "border-box", marginBottom: "12px" }}
+                              onFocus={e => e.target.style.borderColor = "#16a34a"}
+                              onBlur={e => e.target.style.borderColor = "#bbf7d0"}
+                            />
+                            <div style={{ display: "flex", gap: "8px" }}>
+                              <button
+                                disabled={replyingId === msg._id || !replyText.trim()}
+                                onClick={async () => {
+                                  if (!replyText.trim()) return;
+                                  setReplyingId(msg._id);
+                                  try {
+                                    const res = await fetch(`${BASE_URL}/support/reply/${msg._id}`, {
+                                      method: "PUT",
+                                      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                      body: JSON.stringify({ reply: replyText.trim() }),
+                                    });
+                                    const data = await res.json();
+                                    if (res.ok) {
+                                      setSupportMessages(prev => prev.map(m => m._id === msg._id ? { ...m, ...data.supportMessage } : m));
+                                      setReplyTarget(null); setReplyText("");
+                                      setSupportMsg("✅ Reply sent! User will see it in My Account → Support Messages."); setTimeout(() => setSupportMsg(""), 4000);
+                                    } else {
+                                      setSupportMsg(`❌ ${data.message || "Failed to send reply."}`); setTimeout(() => setSupportMsg(""), 4000);
+                                    }
+                                  } catch { setSupportMsg("❌ Connection error."); setTimeout(() => setSupportMsg(""), 4000); }
+                                  finally { setReplyingId(null); }
+                                }}
+                                style={{ background: replyingId === msg._id || !replyText.trim() ? "#86efac" : "#16a34a", color: "white", border: "none", padding: "10px 24px", borderRadius: "50px", fontSize: "13px", fontWeight: "600", cursor: replyingId === msg._id || !replyText.trim() ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: "8px" }}
+                              >
+                                {replyingId === msg._id ? (<><div style={{ width: "13px", height: "13px", border: "2px solid rgba(255,255,255,0.4)", borderTop: "2px solid white", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />Sending...</>) : "✉️ Send Reply"}
+                              </button>
+                              <button onClick={() => { setReplyTarget(null); setReplyText(""); }} style={{ background: "white", color: "var(--gray-500)", border: "1.5px solid var(--gray-200)", padding: "10px 18px", borderRadius: "50px", fontSize: "13px", fontWeight: "500", cursor: "pointer" }}>Cancel</button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+        {/* ---- END: SUPPORT MESSAGES TAB ---- */}
 
       </div>
       <style>{`

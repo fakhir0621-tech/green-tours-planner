@@ -16,6 +16,7 @@ const recommendationRoutes = require("./routes/recommendationRoutes");
 const weatherRoutes = require("./routes/weatherRoutes");
 const analyticsRoutes = require("./routes/analyticsRoutes");
 const chatbotRoutes = require("./routes/chatbotRoutes");
+const supportRoutes = require("./routes/supportRoutes");
 
 const app = express();
 
@@ -37,6 +38,7 @@ app.use("/api/recommendations", recommendationRoutes);
 app.use("/api/weather", weatherRoutes);
 app.use("/api/admin/analytics", analyticsRoutes);
 app.use("/api/chatbot", chatbotRoutes);
+app.use("/api/support", supportRoutes);
 
 app.get("/", (req, res) => {
   res.send("Green Tours Planner API Running");

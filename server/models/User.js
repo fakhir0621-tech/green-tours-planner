@@ -29,7 +29,7 @@ const userSchema = new mongoose.Schema(
       default: "traveler",
     },
 
-    // ---- MODERATION FIELDS (new — added cleanly) ----
+    // ---- MODERATION FIELDS ----
     isBanned: {
       type: Boolean,
       default: false,
@@ -73,6 +73,16 @@ const userSchema = new mongoose.Schema(
     moderationNotes: {
       type: String,
       default: "",
+    },
+
+    // ---- NEW: PASSWORD RESET FIELDS ----
+    resetPasswordToken: {
+      type: String,
+      default: undefined,
+    },
+    resetPasswordExpiry: {
+      type: Date,
+      default: undefined,
     },
   },
   {

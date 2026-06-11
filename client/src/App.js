@@ -12,6 +12,8 @@ import Contact from "./pages/Contact";
 import AdminDashboard from "./pages/AdminDashboard";
 import BookingPage from "./pages/BookingPage";
 import ChatWidget from "./components/ChatWidget";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 
 function App() {
   return (
@@ -28,9 +30,10 @@ function App() {
         <Route path="/contact" element={<Contact />} />
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/book/:tourId" element={<BookingPage />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password/:token" element={<ResetPassword />} />
       </Routes>
       <Footer />
-      {/* CHATBOT WIDGET — shows on every page */}
       <ChatWidget />
     </Router>
   );

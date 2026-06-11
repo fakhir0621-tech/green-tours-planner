@@ -2,47 +2,79 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getTravelScore, getWeatherIcon } from "./weatherUtils";
 
-const API_KEY = process.env.REACT_APP_WEATHER_API_KEY;
+const API_KEY = "b7cf270e60b891c8bbc6865a8297828a";
 
-// Popular Pakistani/Kashmir destinations for quick select
+// Pakistani/Kashmir cities with coordinates (OpenWeather works better with coords)
 const QUICK_CITIES = [
-  "Hunza", "Skardu", "Murree", "Naran", "Swat",
-  "Gilgit", "Chitral", "Lahore", "Islamabad", "Karachi",
+  { name: "Hunza",       lat: 36.3167, lon: 74.6500 },
+  { name: "Skardu",      lat: 35.2971, lon: 75.6333 },
+  { name: "Murree",      lat: 33.9061, lon: 73.3939 },
+  { name: "Naran",       lat: 34.9011, lon: 73.6508 },
+  { name: "Swat",        lat: 35.2227, lon: 72.4258 },
+  { name: "Gilgit",      lat: 35.9208, lon: 74.3083 },
+  { name: "Chitral",     lat: 35.8514, lon: 71.7864 },
+  { name: "Lahore",      lat: 31.5497, lon: 74.3436 },
+  { name: "Islamabad",   lat: 33.7294, lon: 73.0931 },
+  { name: "Karachi",     lat: 24.8607, lon: 67.0011 },
 ];
 
 export default function WeatherWidget({ defaultCity = "" }) {
   const navigate = useNavigate();
-  const [city, setCity]       = useState(defaultCity);
-  const [date, setDate]       = useState("");
-  const [result, setResult]   = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState("");
 
-  const today    = new Date().toISOString().split("T")[0];
-  const maxDate  = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const [cityInput, setCityInput]   = useState(defaultCity);
+  const [selectedCity, setSelectedCity] = useState(null); // stores { name, lat, lon } if quick-picked
+  const [date, setDate]             = useState("");
+  const [result, setResult]         = useState(null);
+  const [loading, setLoading]       = useState(false);
+  const [error, setError]           = useState("");
+
+  const today   = new Date().toISOString().split("T")[0];
+  const maxDate = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+
+  const handleQuickSelect = (city) => {
+    setSelectedCity(city);
+    setCityInput(city.name);
+    setError("");
+    setResult(null);
+  };
 
   const checkWeather = async () => {
-    if (!city.trim()) { setError("Please enter a destination."); return; }
-    if (!date)        { setError("Please select a travel date."); return; }
+    const trimmed = cityInput.trim();
+    if (!trimmed) { setError("Please enter a destination."); return; }
+    if (!date)    { setError("Please select a travel date."); return; }
     setError(""); setLoading(true); setResult(null);
 
     try {
-      const res  = await fetch(
-        `https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(city.trim())}&appid=${API_KEY}&units=metric&cnt=40`
+      let url;
+
+      // If user picked from quick list → use coordinates (much more reliable)
+      const matched = QUICK_CITIES.find(
+        c => c.name.toLowerCase() === trimmed.toLowerCase()
       );
+
+      if (matched || selectedCity) {
+        const city = matched || selectedCity;
+        url = `https://api.openweathermap.org/data/2.5/forecast?lat=${city.lat}&lon=${city.lon}&appid=${API_KEY}&units=metric&cnt=40`;
+      } else {
+        // User typed a custom city — try by name
+        url = `https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(trimmed)}&appid=${API_KEY}&units=metric&cnt=40`;
+      }
+
+      const res  = await fetch(url);
       const data = await res.json();
 
       if (data.cod !== "200" && data.cod !== 200) {
-        setError(`City "${city}" not found. Try a nearby major city.`);
+        // Suggest a fallback
+        setError(`"${trimmed}" not found in weather database. Try a nearby city like Gilgit, Islamabad, or Lahore — or pick from the quick list above.`);
         setLoading(false);
         return;
       }
 
-      // Find forecast closest to selected date
+      // Find forecast closest to selected date (noon of that day)
       const selectedDate = new Date(date);
-      selectedDate.setHours(12, 0, 0, 0); // noon of selected day
+      selectedDate.setHours(12, 0, 0, 0);
 
-      let closest    = null;
+      let closest     = null;
       let closestDiff = Infinity;
 
       data.list.forEach(item => {
@@ -55,7 +87,7 @@ export default function WeatherWidget({ defaultCity = "" }) {
       });
 
       if (!closest) {
-        setError("No forecast data for that date. Try within 5 days.");
+        setError("No forecast data for that date. OpenWeather only provides forecasts up to 5 days ahead.");
         setLoading(false);
         return;
       }
@@ -63,7 +95,7 @@ export default function WeatherWidget({ defaultCity = "" }) {
       const temp        = Math.round(closest.main.temp);
       const feelsLike   = Math.round(closest.main.feels_like);
       const humidity    = closest.main.humidity;
-      const windSpeed   = Math.round(closest.wind.speed * 3.6); // m/s to km/h
+      const windSpeed   = Math.round(closest.wind.speed * 3.6);
       const weatherMain = closest.weather[0].main;
       const weatherDesc = closest.weather[0].description;
       const rainChance  = closest.pop ? Math.round(closest.pop * 100) : 0;
@@ -71,7 +103,7 @@ export default function WeatherWidget({ defaultCity = "" }) {
       const analysis    = getTravelScore(temp, weatherMain, windSpeed, humidity);
 
       setResult({
-        city:     data.city.name,
+        city:     matched?.name || selectedCity?.name || data.city.name,
         country:  data.city.country,
         temp, feelsLike, humidity, windSpeed,
         weatherMain, weatherDesc, rainChance,
@@ -80,15 +112,16 @@ export default function WeatherWidget({ defaultCity = "" }) {
           weekday: "long", month: "long", day: "numeric",
         }),
       });
+
     } catch {
-      setError("Failed to fetch weather. Check your connection.");
+      setError("Failed to fetch weather. Check your connection and try again.");
     } finally {
       setLoading(false);
     }
   };
 
   const handleBookNow = () => {
-    navigate("/tours", { state: { prefillLocation: city } });
+    navigate("/tours", { state: { prefillLocation: cityInput } });
   };
 
   return (
@@ -116,8 +149,7 @@ export default function WeatherWidget({ defaultCity = "" }) {
         <div>
           <h3 style={{
             fontFamily: "'Playfair Display', serif",
-            fontSize: "16px", fontWeight: "700", color: "white",
-            marginBottom: "2px",
+            fontSize: "16px", fontWeight: "700", color: "white", marginBottom: "2px",
           }}>
             Trip Weather Checker
           </h3>
@@ -130,35 +162,29 @@ export default function WeatherWidget({ defaultCity = "" }) {
       <div style={{ padding: "22px 24px" }}>
 
         {/* QUICK CITY CHIPS */}
-        <div style={{
-          display: "flex", gap: "6px", flexWrap: "wrap",
-          marginBottom: "16px",
-        }}>
+        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "16px" }}>
           <span style={{
-            fontSize: "11px", color: "var(--text-muted)",
-            fontWeight: "600", alignSelf: "center",
-            marginRight: "4px", whiteSpace: "nowrap",
+            fontSize: "11px", color: "var(--text-muted)", fontWeight: "600",
+            alignSelf: "center", marginRight: "4px", whiteSpace: "nowrap",
           }}>
             Quick:
           </span>
           {QUICK_CITIES.map(c => (
             <button
-              key={c}
-              onClick={() => { setCity(c); setError(""); setResult(null); }}
+              key={c.name}
+              onClick={() => handleQuickSelect(c)}
               style={{
-                padding: "4px 12px",
-                borderRadius: "50px",
-                border: city === c
+                padding: "4px 12px", borderRadius: "50px",
+                border: cityInput === c.name
                   ? "1.5px solid var(--green-500)"
                   : "1.5px solid var(--border)",
-                background: city === c ? "var(--green-50)" : "transparent",
-                color: city === c ? "var(--green-700)" : "var(--text-muted)",
-                fontSize: "11px", fontWeight: city === c ? "600" : "400",
-                cursor: "pointer", transition: "all 0.15s",
-                whiteSpace: "nowrap",
+                background: cityInput === c.name ? "var(--green-50)" : "transparent",
+                color: cityInput === c.name ? "var(--green-700)" : "var(--text-muted)",
+                fontSize: "11px", fontWeight: cityInput === c.name ? "600" : "400",
+                cursor: "pointer", transition: "all 0.15s", whiteSpace: "nowrap",
               }}
             >
-              {c}
+              {c.name}
             </button>
           ))}
         </div>
@@ -167,34 +193,36 @@ export default function WeatherWidget({ defaultCity = "" }) {
         <div style={{
           display: "grid",
           gridTemplateColumns: "1fr 1fr auto",
-          gap: "10px",
-          alignItems: "end",
+          gap: "10px", alignItems: "end",
         }}>
+
           {/* CITY INPUT */}
           <div>
             <label style={{
-              display: "block", fontSize: "12px",
-              fontWeight: "600", color: "var(--text-secondary)",
-              marginBottom: "6px", textTransform: "uppercase",
-              letterSpacing: "0.5px",
+              display: "block", fontSize: "12px", fontWeight: "600",
+              color: "var(--text-secondary)", marginBottom: "6px",
+              textTransform: "uppercase", letterSpacing: "0.5px",
             }}>
               📍 Destination
             </label>
             <input
               type="text"
-              value={city}
-              onChange={e => { setCity(e.target.value); setError(""); setResult(null); }}
+              value={cityInput}
+              onChange={e => {
+                setCityInput(e.target.value);
+                setSelectedCity(null);
+                setError("");
+                setResult(null);
+              }}
               onKeyDown={e => e.key === "Enter" && checkWeather()}
-              placeholder="e.g. Hunza, Skardu..."
+              placeholder="e.g. Gilgit, Islamabad, Lahore..."
               style={{
                 width: "100%", padding: "11px 14px",
                 border: "1.5px solid var(--border)",
                 borderRadius: "10px", fontSize: "14px",
                 fontFamily: "'DM Sans', sans-serif",
-                color: "var(--text-primary)",
-                background: "var(--bg-card)",
-                outline: "none", boxSizing: "border-box",
-                transition: "border-color 0.2s",
+                color: "var(--text-primary)", background: "var(--bg-card)",
+                outline: "none", boxSizing: "border-box", transition: "border-color 0.2s",
               }}
               onFocus={e => e.target.style.borderColor = "#16a34a"}
               onBlur={e => e.target.style.borderColor = "var(--border)"}
@@ -204,10 +232,9 @@ export default function WeatherWidget({ defaultCity = "" }) {
           {/* DATE INPUT */}
           <div>
             <label style={{
-              display: "block", fontSize: "12px",
-              fontWeight: "600", color: "var(--text-secondary)",
-              marginBottom: "6px", textTransform: "uppercase",
-              letterSpacing: "0.5px",
+              display: "block", fontSize: "12px", fontWeight: "600",
+              color: "var(--text-secondary)", marginBottom: "6px",
+              textTransform: "uppercase", letterSpacing: "0.5px",
             }}>
               📅 Travel Date
             </label>
@@ -222,10 +249,8 @@ export default function WeatherWidget({ defaultCity = "" }) {
                 border: "1.5px solid var(--border)",
                 borderRadius: "10px", fontSize: "14px",
                 fontFamily: "'DM Sans', sans-serif",
-                color: "var(--text-primary)",
-                background: "var(--bg-card)",
-                outline: "none", boxSizing: "border-box",
-                transition: "border-color 0.2s",
+                color: "var(--text-primary)", background: "var(--bg-card)",
+                outline: "none", boxSizing: "border-box", transition: "border-color 0.2s",
               }}
               onFocus={e => e.target.style.borderColor = "#16a34a"}
               onBlur={e => e.target.style.borderColor = "var(--border)"}
@@ -255,34 +280,27 @@ export default function WeatherWidget({ defaultCity = "" }) {
                 <div style={{
                   width: "14px", height: "14px",
                   border: "2px solid rgba(255,255,255,0.4)",
-                  borderTop: "2px solid white",
-                  borderRadius: "50%",
+                  borderTop: "2px solid white", borderRadius: "50%",
                   animation: "spin 0.7s linear infinite",
                 }} />
                 Checking...
               </>
-            ) : (
-              <>🔍 Check</>
-            )}
+            ) : <>🔍 Check</>}
           </button>
         </div>
 
-        {/* DATE NOTE */}
-        <p style={{
-          fontSize: "11px", color: "var(--text-muted)",
-          marginTop: "8px",
-        }}>
-          ℹ️ OpenWeather provides accurate forecasts up to 5 days ahead.
+        {/* TIP NOTE */}
+        <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "8px" }}>
+          💡 Use quick buttons above for best accuracy on Pakistani cities. Custom city names may vary.
         </p>
 
         {/* ERROR */}
         {error && (
           <div style={{
             background: "#fef2f2", border: "1px solid #fecaca",
-            color: "#dc2626", padding: "10px 14px",
+            color: "#dc2626", padding: "12px 16px",
             borderRadius: "10px", fontSize: "13px",
-            marginTop: "14px", display: "flex",
-            alignItems: "center", gap: "8px",
+            marginTop: "14px", lineHeight: "1.6",
           }}>
             ⚠️ {error}
           </div>
@@ -294,8 +312,7 @@ export default function WeatherWidget({ defaultCity = "" }) {
             marginTop: "20px",
             background: result.bg,
             border: `1.5px solid ${result.color}30`,
-            borderRadius: "14px",
-            overflow: "hidden",
+            borderRadius: "14px", overflow: "hidden",
           }}>
 
             {/* RESULT HEADER */}
@@ -324,12 +341,8 @@ export default function WeatherWidget({ defaultCity = "" }) {
                 padding: "6px 16px", borderRadius: "50px",
               }}>
                 <span style={{ fontSize: "16px" }}>{result.emoji}</span>
-                <span style={{ fontSize: "13px", fontWeight: "700" }}>
-                  {result.label}
-                </span>
-                <span style={{ fontSize: "13px", fontWeight: "700", opacity: 0.85 }}>
-                  {result.score}/100
-                </span>
+                <span style={{ fontSize: "13px", fontWeight: "700" }}>{result.label}</span>
+                <span style={{ fontSize: "13px", fontWeight: "700", opacity: 0.85 }}>{result.score}/100</span>
               </div>
             </div>
 
@@ -337,56 +350,41 @@ export default function WeatherWidget({ defaultCity = "" }) {
             <div style={{
               display: "grid",
               gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))",
-              gap: "0",
-              padding: "16px 20px",
+              gap: "0", padding: "16px 20px",
               borderBottom: `1px solid ${result.color}15`,
             }}>
               {[
-                { icon: result.icon,  label: "Condition",   val: result.weatherDesc },
-                { icon: "🌡️",        label: "Temperature", val: `${result.temp}°C` },
-                { icon: "🤔",        label: "Feels Like",  val: `${result.feelsLike}°C` },
-                { icon: "🌧️",        label: "Rain Chance", val: `${result.rainChance}%` },
-                { icon: "💨",        label: "Wind",        val: `${result.windSpeed} km/h` },
-                { icon: "💧",        label: "Humidity",    val: `${result.humidity}%` },
+                { icon: result.icon, label: "Condition",   val: result.weatherDesc },
+                { icon: "🌡️",       label: "Temperature", val: `${result.temp}°C` },
+                { icon: "🤔",       label: "Feels Like",  val: `${result.feelsLike}°C` },
+                { icon: "🌧️",       label: "Rain Chance", val: `${result.rainChance}%` },
+                { icon: "💨",       label: "Wind",        val: `${result.windSpeed} km/h` },
+                { icon: "💧",       label: "Humidity",    val: `${result.humidity}%` },
               ].map((s, i, arr) => (
                 <div key={s.label} style={{
                   textAlign: "center", padding: "10px 8px",
                   borderRight: i < arr.length - 1 ? `1px solid ${result.color}15` : "none",
                 }}>
                   <div style={{ fontSize: "20px", marginBottom: "4px" }}>{s.icon}</div>
-                  <div style={{
-                    fontSize: "11px", color: "var(--text-muted)",
-                    marginBottom: "3px", fontWeight: "500",
-                  }}>{s.label}</div>
-                  <div style={{
-                    fontSize: "13px", fontWeight: "700",
-                    color: "var(--text-primary)",
-                    textTransform: "capitalize",
-                  }}>{s.val}</div>
+                  <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "3px", fontWeight: "500" }}>{s.label}</div>
+                  <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)", textTransform: "capitalize" }}>{s.val}</div>
                 </div>
               ))}
             </div>
 
             {/* ADVICE + WARNINGS */}
             <div style={{ padding: "14px 20px" }}>
-              <p style={{
-                fontSize: "14px", fontWeight: "600",
-                color: result.color, marginBottom: "8px",
-              }}>
+              <p style={{ fontSize: "14px", fontWeight: "600", color: result.color, marginBottom: "8px" }}>
                 {result.emoji} {result.advice}
               </p>
               {result.warnings.length > 0 && (
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
                   {result.warnings.map((w, i) => (
                     <span key={i} style={{
-                      fontSize: "11px", padding: "3px 10px",
-                      borderRadius: "50px",
-                      background: `${result.color}15`,
-                      color: result.color, fontWeight: "500",
-                      border: `1px solid ${result.color}25`,
-                    }}>
-                      {w}
-                    </span>
+                      fontSize: "11px", padding: "3px 10px", borderRadius: "50px",
+                      background: `${result.color}15`, color: result.color,
+                      fontWeight: "500", border: `1px solid ${result.color}25`,
+                    }}>{w}</span>
                   ))}
                 </div>
               )}
@@ -400,10 +398,7 @@ export default function WeatherWidget({ defaultCity = "" }) {
                 display: "flex", gap: "10px",
                 alignItems: "center", flexWrap: "wrap",
               }}>
-                <p style={{
-                  fontSize: "13px", color: "var(--text-muted)",
-                  flex: 1, minWidth: "160px",
-                }}>
+                <p style={{ fontSize: "13px", color: "var(--text-muted)", flex: 1, minWidth: "160px" }}>
                   Ready to explore {result.city}?
                 </p>
                 <button
@@ -411,12 +406,10 @@ export default function WeatherWidget({ defaultCity = "" }) {
                   style={{
                     background: result.color, color: "white",
                     border: "none", padding: "10px 22px",
-                    borderRadius: "50px", fontSize: "13px",
-                    fontWeight: "600", cursor: "pointer",
-                    boxShadow: `0 4px 12px ${result.color}40`,
-                    transition: "all 0.2s",
-                    display: "flex", alignItems: "center", gap: "6px",
-                    whiteSpace: "nowrap",
+                    borderRadius: "50px", fontSize: "13px", fontWeight: "600",
+                    cursor: "pointer", boxShadow: `0 4px 12px ${result.color}40`,
+                    transition: "all 0.2s", display: "flex",
+                    alignItems: "center", gap: "6px", whiteSpace: "nowrap",
                   }}
                   onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; }}
                   onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; }}
