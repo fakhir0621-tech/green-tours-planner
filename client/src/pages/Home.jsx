@@ -5,7 +5,10 @@ import FilterBar from "../components/FilterBar";
 import WeatherWidget from "../components/weather/WeatherWidget";
 import { toursAPI } from "../services/api";
 
+const BASE_URL = "http://localhost:5000/api";
+
 // ---- ANIMATED REVIEW CARD ----
+// Accepts both real DB reviews and fallback static reviews
 function ReviewCard({ r }) {
   return (
     <div style={{
@@ -29,7 +32,7 @@ function ReviewCard({ r }) {
             fontSize: "16px", fontWeight: "700", color: "white",
             flexShrink: 0,
           }}>
-            {r.name[0]}
+            {(r.name || "U")[0]}
           </div>
           <div>
             <p style={{ fontSize: "13px", fontWeight: "600", color: "white", margin: 0 }}>{r.name}</p>
@@ -53,70 +56,60 @@ function ReviewCard({ r }) {
   );
 }
 
-// ---- MARQUEE REVIEWS SECTION ----
-function ReviewsMarquee() {
-  const REVIEWS = [
-  
-  {
-    name: "Ali Khan",
-    location: "Lahore, Pakistan",
-    rating: 5,
-    text: "Hunza Valley was absolutely breathtaking. The entire trip was organized perfectly, and every moment felt unforgettable.",
-    tour: "Hunza Valley Tour",
-  },
-  {
-    name: "Ayesha Malik",
-    location: "Islamabad, Pakistan",
-    rating: 5,
-    text: "Skardu's beauty is beyond description. The hotels, transport, and guides were all excellent throughout the journey.",
-    tour: "Skardu Adventure",
-  },
-  {
-    name: "Muhammad Hamza",
-    location: "Karachi, Pakistan",
-    rating: 5,
-    text: "Naran Kaghan offered stunning views at every stop. Everything was well managed and completely stress-free.",
-    tour: "Naran Kaghan Explorer",
-  },
-  {
-    name: "Fatima Noor",
-    location: "Rawalpindi, Pakistan",
-    rating: 4,
-    text: "Fairy Meadows was a dream destination. The peaceful environment and majestic mountain views were unforgettable.",
-    tour: "Fairy Meadows Trek",
-  },
-  {
-    name: "Usman Tariq",
-    location: "Faisalabad, Pakistan",
-    rating: 5,
-    text: "Swat Valley was one of the most beautiful places I have visited. The itinerary was perfectly planned from start to finish.",
-    tour: "Swat Valley Escape",
-  },
-  {
-    name: "Zainab Ahmed",
-    location: "Multan, Pakistan",
-    rating: 5,
-    text: "Neelum Valley truly deserves its reputation as paradise on earth. The entire experience exceeded our expectations.",
-    tour: "Neelum Valley Retreat",
-  },
-  {
-    name: "Bilal Hussain",
-    location: "Peshawar, Pakistan",
-    rating: 5,
-    text: "The views at Shogran and Siri Paye were spectacular. It was one of the most enjoyable family trips we've had.",
-    tour: "Shogran & Siri Paye Tour",
-  },
-  {
-    name: "Maryam Sheikh",
-    location: "Sialkot, Pakistan",
-    rating: 4,
-    text: "Murree and Patriata were the perfect weekend getaway. Excellent service and beautiful scenery throughout the tour.",
-    tour: "Murree Hills Tour",
-  },
+// ---- STATIC FALLBACK REVIEWS (shown while loading or if no approved reviews yet) ----
+const FALLBACK_REVIEWS = [
+  { name: "Ali Khan",       location: "Lahore, Pakistan",      rating: 5, text: "Hunza Valley was absolutely breathtaking. The entire trip was organized perfectly.", tour: "Hunza Valley Tour" },
+  { name: "Ayesha Malik",   location: "Islamabad, Pakistan",   rating: 5, text: "Skardu's beauty is beyond description. Hotels, transport, and guides were excellent.", tour: "Skardu Adventure" },
+  { name: "Muhammad Hamza", location: "Karachi, Pakistan",     rating: 5, text: "Naran Kaghan offered stunning views at every stop. Completely stress-free.", tour: "Naran Kaghan Explorer" },
+  { name: "Fatima Noor",    location: "Rawalpindi, Pakistan",  rating: 4, text: "Fairy Meadows was a dream destination. Peaceful environment and majestic views.", tour: "Fairy Meadows Trek" },
+  { name: "Usman Tariq",    location: "Faisalabad, Pakistan",  rating: 5, text: "Swat Valley was one of the most beautiful places I have visited.", tour: "Swat Valley Escape" },
+  { name: "Zainab Ahmed",   location: "Multan, Pakistan",      rating: 5, text: "Neelum Valley truly deserves its reputation as paradise on earth.", tour: "Neelum Valley Retreat" },
+  { name: "Bilal Hussain",  location: "Peshawar, Pakistan",    rating: 5, text: "The views at Shogran and Siri Paye were spectacular.", tour: "Shogran & Siri Paye Tour" },
+  { name: "Maryam Sheikh",  location: "Sialkot, Pakistan",     rating: 4, text: "Murree and Patriata were the perfect weekend getaway.", tour: "Murree Hills Tour" },
 ];
-  
-  const ROW1 = REVIEWS;
-  const ROW2 = [...REVIEWS].reverse();
+
+// ---- MARQUEE REVIEWS SECTION — now fetches real approved reviews ----
+function ReviewsMarquee() {
+  const [reviews, setReviews]   = useState([]);
+  const [loading, setLoading]   = useState(true);
+
+  // Fetch approved reviews from backend on mount
+  useEffect(() => {
+    const fetchApprovedReviews = async () => {
+      try {
+        const res  = await fetch(`${BASE_URL}/reviews/approved/public`);
+        const data = await res.json();
+        const list = data.reviews || [];
+
+        if (list.length >= 3) {
+          // Map DB review shape to the shape ReviewCard expects
+          const mapped = list.map(r => ({
+            name:     r.user?.name     || "Traveler",
+            location: r.tour?.location || "Pakistan",
+            rating:   r.rating        || 5,
+            text:     r.comment       || "",
+            tour:     r.tour?.tourName || "GreenTours Package",
+          }));
+          setReviews(mapped);
+        } else {
+          // Not enough approved reviews yet — use fallbacks
+          setReviews(FALLBACK_REVIEWS);
+        }
+      } catch {
+        // On error fall back to static reviews so page never breaks
+        setReviews(FALLBACK_REVIEWS);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchApprovedReviews();
+  }, []);
+
+  // While loading use fallback so marquee always has content
+  const displayReviews = loading ? FALLBACK_REVIEWS : reviews;
+  const ROW1 = displayReviews;
+  const ROW2 = [...displayReviews].reverse();
 
   return (
     <section style={{
@@ -192,7 +185,7 @@ function ReviewsMarquee() {
   );
 }
 
-// ---- MAIN HOME COMPONENT ----
+// ---- MAIN HOME COMPONENT — unchanged ----
 export default function Home() {
   const [tours, setTours]       = useState([]);
   const [loading, setLoading]   = useState(true);
@@ -282,13 +275,12 @@ export default function Home() {
         ))}
       </div>
 
-      {/* ANIMATED REVIEWS SECTION */}
+      {/* ANIMATED REVIEWS SECTION — now uses real approved reviews */}
       <ReviewsMarquee />
 
       {/* TOURS SECTION */}
       <div className="home-tours-section">
 
-        {/* SECTION HEADER */}
         <div style={{ marginBottom: "12px" }}>
           <p className="home-tours-header-label">OUR PACKAGES</p>
           <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: "clamp(28px, 3.5vw, 42px)", fontWeight: "700", color: "var(--text-primary)", lineHeight: "1.2" }}>
@@ -297,12 +289,10 @@ export default function Home() {
           <p className="home-tours-header-sub">Handcrafted tours designed around your sense of adventure.</p>
         </div>
 
-        {/* ---- NEW: WEATHER WIDGET — placed above filters ---- */}
         <div style={{ marginTop: "32px" }}>
           <WeatherWidget />
         </div>
 
-        {/* FILTER */}
         <div style={{ marginTop: "8px" }}>
           <FilterBar
             search={search}     setSearch={setSearch}
@@ -313,7 +303,6 @@ export default function Home() {
           />
         </div>
 
-        {/* LOADING */}
         {loading && (
           <div style={{ textAlign: "center", padding: "80px 0" }}>
             <div style={{ width: "48px", height: "48px", border: "4px solid var(--green-100)", borderTop: "4px solid var(--green-500)", borderRadius: "50%", margin: "0 auto 16px", animation: "spin 0.8s linear infinite" }} />
@@ -322,7 +311,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* NO RESULTS */}
         {!loading && tours.length === 0 && (
           <div style={{ textAlign: "center", padding: "80px 0" }}>
             <div className="home-empty-icon" style={{ fontSize: "52px", marginBottom: "16px" }}>🔭</div>
@@ -331,7 +319,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* TOUR GRID */}
         {!loading && tours.length > 0 && (
           <div className="home-tour-grid">
             {tours.slice(0, 6).map((tour) => (
@@ -340,7 +327,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* VIEW ALL BUTTON */}
         {!loading && tours.length > 6 && (
           <div style={{ textAlign: "center", marginTop: "48px" }}>
             <a href="/tours" className="home-view-all-btn"

@@ -1057,44 +1057,208 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* ---- REVIEWS TAB ---- */}
-        {activeTab === "reviews" && (
-          <div style={{ background: "white", border: "1px solid var(--gray-100)", borderRadius: "16px", overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
-            <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--gray-100)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
-              <div><h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: "18px", fontWeight: "700", color: "var(--gray-800)", marginBottom: "4px" }}>All Reviews</h3><p style={{ fontSize: "13px", color: "var(--gray-400)" }}>Delete reviews or block users from submitting new ones.</p></div>
-              <div style={{ display: "flex", gap: "8px" }}>
-                <span style={{ background: "var(--green-50)", color: "var(--green-700)", padding: "5px 14px", borderRadius: "50px", fontSize: "12px", fontWeight: "600" }}>{allReviews.length} reviews</span>
-                {blockedUsers.length > 0 && <span style={{ background: "#fee2e2", color: "#dc2626", padding: "5px 14px", borderRadius: "50px", fontSize: "12px", fontWeight: "600" }}>{blockedUsers.length} blocked</span>}
+        {/* ---- REVIEWS TAB — updated with approve/reject ---- */}
+{activeTab === "reviews" && (
+  <div style={{ background: "white", border: "1px solid var(--gray-100)", borderRadius: "16px", overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
+    <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--gray-100)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
+      <div>
+        <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: "18px", fontWeight: "700", color: "var(--gray-800)", marginBottom: "4px" }}>All Reviews</h3>
+        <p style={{ fontSize: "13px", color: "var(--gray-400)" }}>Approve reviews to show them on the Home page. Reject to hide from public.</p>
+      </div>
+      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+        {/* Status counts */}
+        <span style={{ background: "#fef9c3", color: "#92400e", padding: "5px 14px", borderRadius: "50px", fontSize: "12px", fontWeight: "600", border: "1px solid #fde68a" }}>
+          ⏳ {allReviews.filter(r => (r.status || "pending") === "pending").length} pending
+        </span>
+        <span style={{ background: "#dcfce7", color: "#16a34a", padding: "5px 14px", borderRadius: "50px", fontSize: "12px", fontWeight: "600", border: "1px solid #86efac" }}>
+          ✅ {allReviews.filter(r => r.status === "approved").length} approved
+        </span>
+        <span style={{ background: "#fee2e2", color: "#dc2626", padding: "5px 14px", borderRadius: "50px", fontSize: "12px", fontWeight: "600", border: "1px solid #fecaca" }}>
+          ❌ {allReviews.filter(r => r.status === "rejected").length} rejected
+        </span>
+        {blockedUsers.length > 0 && (
+          <span style={{ background: "#f3f4f6", color: "#6b7280", padding: "5px 14px", borderRadius: "50px", fontSize: "12px", fontWeight: "600" }}>
+            🚫 {blockedUsers.length} blocked
+          </span>
+        )}
+      </div>
+    </div>
+
+    {allReviews.length === 0 ? (
+      <div style={{ textAlign: "center", padding: "60px 0" }}>
+        <div style={{ fontSize: "48px", marginBottom: "12px" }}>⭐</div>
+        <p style={{ color: "var(--gray-400)", fontSize: "15px" }}>No reviews yet.</p>
+      </div>
+    ) : (
+      allReviews.map((review, i) => {
+        const userId   = review.userId?._id || review.user?._id || review.user || review.userId;
+        const userName = review.userId?.name || review.user?.name || review.userName || "Unknown";
+        const tourName = review.tourId?.tourName || review.tour?.tourName || review.tourId?.title || review.tourName || "N/A";
+        const isBlocked = blockedUsers.includes(userId);
+        const rating    = review.rating || 5;
+        const status    = review.status || "pending";
+
+        // Status badge config
+        const STATUS_BADGE = {
+          pending:  { bg: "#fef9c3", color: "#92400e", border: "#fde68a", icon: "⏳", label: "Pending" },
+          approved: { bg: "#dcfce7", color: "#16a34a", border: "#86efac", icon: "✅", label: "Approved — visible on Home page" },
+          rejected: { bg: "#fee2e2", color: "#dc2626", border: "#fecaca", icon: "❌", label: "Rejected — hidden from public" },
+        };
+        const sb = STATUS_BADGE[status] || STATUS_BADGE.pending;
+
+        return (
+          <div key={review._id} style={{
+            padding: "22px 24px",
+            borderBottom: i < allReviews.length - 1 ? "1px solid var(--gray-50)" : "none",
+            transition: "background 0.15s",
+            opacity: status === "rejected" ? 0.7 : 1,
+          }}
+            onMouseEnter={e => e.currentTarget.style.background = "var(--gray-50)"}
+            onMouseLeave={e => e.currentTarget.style.background = "white"}
+          >
+            <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "20px", alignItems: "start" }}>
+              <div>
+                {/* REVIEWER INFO */}
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px", flexWrap: "wrap" }}>
+                  <div style={{
+                    width: "34px", height: "34px", borderRadius: "50%",
+                    background: isBlocked ? "#dc2626" : status === "approved" ? "#16a34a" : status === "rejected" ? "#9ca3af" : "var(--green-600)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: "13px", fontWeight: "700", color: "white", flexShrink: 0,
+                  }}>
+                    {userName[0]?.toUpperCase()}
+                  </div>
+                  <span style={{ fontSize: "14px", fontWeight: "600", color: "var(--gray-800)" }}>{userName}</span>
+                  {isBlocked && (
+                    <span style={{ fontSize: "11px", fontWeight: "600", background: "#fee2e2", color: "#dc2626", padding: "2px 8px", borderRadius: "50px" }}>🚫 Blocked</span>
+                  )}
+                  <span style={{ fontSize: "13px", color: "#f59e0b", letterSpacing: "1px" }}>
+                    {"★".repeat(rating)}{"☆".repeat(5 - rating)}
+                  </span>
+                  {/* REVIEW STATUS BADGE */}
+                  <span style={{
+                    fontSize: "11px", fontWeight: "600",
+                    padding: "2px 10px", borderRadius: "50px",
+                    background: sb.bg, color: sb.color,
+                    border: `1px solid ${sb.border}`,
+                  }}>
+                    {sb.icon} {sb.label}
+                  </span>
+                </div>
+
+                <p style={{ fontSize: "12px", fontWeight: "600", color: "var(--green-600)", marginBottom: "6px" }}>🌿 {tourName}</p>
+                <p style={{ fontSize: "14px", color: "var(--gray-600)", lineHeight: "1.75", fontStyle: "italic", marginBottom: "6px" }}>"{review.comment}"</p>
+                <p style={{ fontSize: "12px", color: "var(--gray-400)" }}>
+                  {review.createdAt ? new Date(review.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : ""}
+                </p>
+              </div>
+
+              {/* ACTION BUTTONS */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px", flexShrink: 0 }}>
+
+                {/* APPROVE — only show if not already approved */}
+                {status !== "approved" && (
+                  <button
+                    onClick={async () => {
+                      try {
+                        const res = await fetch(`${BASE_URL}/reviews/approve/${review._id}`, {
+                          method: "PUT",
+                          headers: { Authorization: `Bearer ${token}` },
+                        });
+                        if (res.ok) {
+                          setAllReviews(prev => prev.map(r =>
+                            r._id === review._id ? { ...r, status: "approved" } : r
+                          ));
+                        }
+                      } catch {}
+                    }}
+                    style={{
+                      background: "#dcfce7", color: "#16a34a",
+                      border: "1.5px solid #86efac",
+                      padding: "7px 16px", borderRadius: "50px",
+                      fontSize: "12px", fontWeight: "600",
+                      cursor: "pointer", whiteSpace: "nowrap",
+                      transition: "all 0.2s",
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = "#16a34a"; e.currentTarget.style.color = "white"; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = "#dcfce7"; e.currentTarget.style.color = "#16a34a"; }}
+                  >
+                    ✅ Approve
+                  </button>
+                )}
+
+                {/* REJECT — only show if not already rejected */}
+                {status !== "rejected" && (
+                  <button
+                    onClick={async () => {
+                      try {
+                        const res = await fetch(`${BASE_URL}/reviews/reject/${review._id}`, {
+                          method: "PUT",
+                          headers: { Authorization: `Bearer ${token}` },
+                        });
+                        if (res.ok) {
+                          setAllReviews(prev => prev.map(r =>
+                            r._id === review._id ? { ...r, status: "rejected" } : r
+                          ));
+                        }
+                      } catch {}
+                    }}
+                    style={{
+                      background: "#fef9c3", color: "#ca8a04",
+                      border: "1.5px solid #fde68a",
+                      padding: "7px 16px", borderRadius: "50px",
+                      fontSize: "12px", fontWeight: "600",
+                      cursor: "pointer", whiteSpace: "nowrap",
+                      transition: "all 0.2s",
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = "#ca8a04"; e.currentTarget.style.color = "white"; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = "#fef9c3"; e.currentTarget.style.color = "#ca8a04"; }}
+                  >
+                    ❌ Reject
+                  </button>
+                )}
+
+                {/* DELETE */}
+                <button
+                  onClick={() => deleteReview(review._id)}
+                  disabled={deletingId === review._id}
+                  style={{
+                    background: deletingId === review._id ? "var(--gray-100)" : "#fef2f2",
+                    color: deletingId === review._id ? "var(--gray-400)" : "#dc2626",
+                    border: `1.5px solid ${deletingId === review._id ? "var(--gray-200)" : "#fecaca"}`,
+                    padding: "7px 16px", borderRadius: "50px",
+                    fontSize: "12px", fontWeight: "600",
+                    cursor: deletingId === review._id ? "not-allowed" : "pointer",
+                    whiteSpace: "nowrap", transition: "all 0.2s",
+                  }}
+                  onMouseEnter={e => { if (deletingId !== review._id) { e.currentTarget.style.background = "#dc2626"; e.currentTarget.style.color = "white"; } }}
+                  onMouseLeave={e => { if (deletingId !== review._id) { e.currentTarget.style.background = "#fef2f2"; e.currentTarget.style.color = "#dc2626"; } }}
+                >
+                  {deletingId === review._id ? "..." : "🗑️ Delete"}
+                </button>
+
+                {/* BLOCK/UNBLOCK USER */}
+                <button
+                  onClick={() => toggleBlockUser(userId, userName)}
+                  style={{
+                    background: isBlocked ? "#dcfce7" : "#fef9c3",
+                    color: isBlocked ? "#16a34a" : "#ca8a04",
+                    border: `1.5px solid ${isBlocked ? "#86efac" : "#fde68a"}`,
+                    padding: "7px 16px", borderRadius: "50px",
+                    fontSize: "12px", fontWeight: "600",
+                    cursor: "pointer", whiteSpace: "nowrap",
+                  }}
+                >
+                  {isBlocked ? "✅ Unblock" : "🚫 Block"}
+                </button>
               </div>
             </div>
-            {allReviews.length === 0 ? <div style={{ textAlign: "center", padding: "60px 0" }}><div style={{ fontSize: "48px", marginBottom: "12px" }}>⭐</div><p style={{ color: "var(--gray-400)", fontSize: "15px" }}>No reviews yet.</p></div>
-            : allReviews.map((review, i) => {
-              const userId = review.userId?._id || review.user || review.userId; const userName = review.userId?.name || review.userName || "Unknown";
-              const tourName = review.tourId?.tourName || review.tourId?.title || review.tourName || "N/A";
-              const isBlocked = blockedUsers.includes(userId); const rating = review.rating || 5;
-              return (
-                <div key={review._id} style={{ padding: "22px 24px", borderBottom: i < allReviews.length - 1 ? "1px solid var(--gray-50)" : "none", display: "grid", gridTemplateColumns: "1fr auto", gap: "20px", alignItems: "start", transition: "background 0.15s" }}
-                  onMouseEnter={e => e.currentTarget.style.background = "var(--gray-50)"} onMouseLeave={e => e.currentTarget.style.background = "white"}>
-                  <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px", flexWrap: "wrap" }}>
-                      <div style={{ width: "34px", height: "34px", borderRadius: "50%", background: isBlocked ? "#dc2626" : "var(--green-600)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", fontWeight: "700", color: "white", flexShrink: 0 }}>{userName[0]?.toUpperCase()}</div>
-                      <span style={{ fontSize: "14px", fontWeight: "600", color: "var(--gray-800)" }}>{userName}</span>
-                      {isBlocked && <span style={{ fontSize: "11px", fontWeight: "600", background: "#fee2e2", color: "#dc2626", padding: "2px 8px", borderRadius: "50px" }}>🚫 Blocked</span>}
-                      <span style={{ fontSize: "13px", color: "#f59e0b", letterSpacing: "1px" }}>{"★".repeat(rating)}{"☆".repeat(5 - rating)}</span>
-                    </div>
-                    <p style={{ fontSize: "12px", fontWeight: "600", color: "var(--green-600)", marginBottom: "6px" }}>🌿 {tourName}</p>
-                    <p style={{ fontSize: "14px", color: "var(--gray-600)", lineHeight: "1.75", fontStyle: "italic", marginBottom: "6px" }}>"{review.comment}"</p>
-                    <p style={{ fontSize: "12px", color: "var(--gray-400)" }}>{review.createdAt ? new Date(review.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : ""}</p>
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px", flexShrink: 0 }}>
-                    <button onClick={() => deleteReview(review._id)} disabled={deletingId === review._id} style={{ background: deletingId === review._id ? "var(--gray-100)" : "#fef2f2", color: deletingId === review._id ? "var(--gray-400)" : "#dc2626", border: `1.5px solid ${deletingId === review._id ? "var(--gray-200)" : "#fecaca"}`, padding: "7px 16px", borderRadius: "50px", fontSize: "12px", fontWeight: "600", cursor: deletingId === review._id ? "not-allowed" : "pointer", whiteSpace: "nowrap" }} onMouseEnter={e => { if (deletingId !== review._id) { e.currentTarget.style.background = "#dc2626"; e.currentTarget.style.color = "white"; } }} onMouseLeave={e => { if (deletingId !== review._id) { e.currentTarget.style.background = "#fef2f2"; e.currentTarget.style.color = "#dc2626"; } }}>{deletingId === review._id ? "..." : "🗑️ Delete"}</button>
-                    <button onClick={() => toggleBlockUser(userId, userName)} style={{ background: isBlocked ? "#dcfce7" : "#fef9c3", color: isBlocked ? "#16a34a" : "#ca8a04", border: `1.5px solid ${isBlocked ? "#86efac" : "#fde68a"}`, padding: "7px 16px", borderRadius: "50px", fontSize: "12px", fontWeight: "600", cursor: "pointer", whiteSpace: "nowrap" }}>{isBlocked ? "✅ Unblock" : "🚫 Block"}</button>
-                  </div>
-                </div>
-              );
-            })}
           </div>
-        )}
+        );
+      })
+    )}
+  </div>
+)}
 
         {/* ---- KNOWLEDGE BASE TAB ---- */}
         {activeTab === "kb" && (
