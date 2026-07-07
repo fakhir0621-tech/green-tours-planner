@@ -290,31 +290,65 @@ export default function Account() {
     setRemovingId(null);
   };
 
-  const handleReviewSubmit = async (e) => {
-    e.preventDefault();
-    if (!reviewForm.tourId) { alert("Please select a tour."); return; }
-    if (!reviewForm.comment.trim()) { alert("Please write your review."); return; }
-    setSubmittingReview(true);
-    const isEdit = !!editingReviewId;
-    try {
-      const res = await fetch(isEdit ? `${BASE_URL}/reviews/${editingReviewId}` : `${BASE_URL}/reviews`, { method: isEdit ? "PUT" : "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify(reviewForm) });
-      const data = await res.json();
-      const saved = data.review || data.data || { _id: editingReviewId || Date.now().toString(), ...reviewForm, tourId: allTours.find(t => t._id === reviewForm.tourId) || { title: "Tour" }, createdAt: new Date().toISOString() };
-      if (isEdit) { setReviews(prev => prev.map(r => r._id === editingReviewId ? { ...r, rating: reviewForm.rating, comment: reviewForm.comment } : r)); }
-      else { setReviews(prev => [saved, ...prev]); }
-      setReviewSuccess(isEdit ? "Review updated! ✅" : "Review submitted! ✅");
-      setTimeout(() => setReviewSuccess(""), 4000);
-    } catch {
-      const optimistic = { _id: editingReviewId || Date.now().toString(), ...reviewForm, tourId: allTours.find(t => t._id === reviewForm.tourId) || { title: "Tour" }, createdAt: new Date().toISOString() };
-      if (isEdit) { setReviews(prev => prev.map(r => r._id === editingReviewId ? { ...r, rating: reviewForm.rating, comment: reviewForm.comment } : r)); }
-      else { setReviews(prev => [optimistic, ...prev]); }
-      setReviewSuccess(isEdit ? "Review updated! ✅" : "Review submitted! ✅");
-      setTimeout(() => setReviewSuccess(""), 4000);
-    } finally {
-      setSubmittingReview(false); setShowReviewForm(false);
-      setEditingReviewId(null); setReviewForm({ tourId: "", rating: 5, comment: "" });
+   const handleReviewSubmit = async (e) => {
+  e.preventDefault();
+  if (!reviewForm.tourId) { alert("Please select a tour."); return; }
+  if (!reviewForm.comment.trim()) { alert("Please write your review."); return; }
+  setSubmittingReview(true);
+  const isEdit = !!editingReviewId;
+  try {
+    const res = await fetch(
+      isEdit
+        ? `${BASE_URL}/reviews/${editingReviewId}`
+        : `${BASE_URL}/reviews/add`,
+      {
+        method: isEdit ? "PUT" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          ...reviewForm,
+          user: user?._id || user?.id,
+        }),
+      }
+    );
+    const data = await res.json();
+
+    if (!res.ok) {
+      alert(data.message || "Failed to submit review.");
+      setSubmittingReview(false);
+      return;
     }
-  };
+
+    const saved = data.review || data.data || {
+      _id: editingReviewId || Date.now().toString(),
+      ...reviewForm,
+      tour: allTours.find(t => t._id === reviewForm.tourId) || { tourName : "Tour" },
+      createdAt: new Date().toISOString(),
+    };
+
+    if (isEdit) {
+      setReviews(prev => prev.map(r => r._id === editingReviewId
+        ? { ...r, rating: reviewForm.rating, comment: reviewForm.comment }
+        : r
+      ));
+    } else {
+      setReviews(prev => [saved, ...prev]);
+    }
+
+    setReviewSuccess(isEdit ? "Review updated! ✅" : "Review submitted! Pending admin approval. ✅");
+    setTimeout(() => setReviewSuccess(""), 4000);
+
+  } catch (err) {
+    alert("Something went wrong. Please try again.");
+  } finally {
+    setSubmittingReview(false);
+    setShowReviewForm(false);
+    setEditingReviewId(null);
+    setReviewForm({ tourId: "", rating: 5, comment: "" });
+  }
+};
 
   const handleDeleteReview = async (id) => {
     if (!window.confirm("Delete this review?")) return;

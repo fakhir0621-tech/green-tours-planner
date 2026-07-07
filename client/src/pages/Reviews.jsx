@@ -30,10 +30,10 @@ const FALLBACK_REVIEWS = [
 ];
 
 const FALLBACK_TOURS = [
-  { _id: "t1", title: "Swiss Alps Trek",     city: "Switzerland" },
-  { _id: "t2", title: "Bali Eco Retreat",    city: "Indonesia" },
+  { _id: "t1", title: "Swiss Alps Trek", city: "Switzerland" },
+  { _id: "t2", title: "Bali Eco Retreat", city: "Indonesia" },
   { _id: "t3", title: "Kyoto Cultural Tour", city: "Japan" },
-  { _id: "t4", title: "Santorini Escape",    city: "Greece" },
+  { _id: "t4", title: "Santorini Escape", city: "Greece" },
 ];
 
 function StarRating({ value, onChange, size = 28 }) {
@@ -67,14 +67,14 @@ export default function Reviews() {
   const { user, token } = useAuth();
   const navigate = useNavigate();
 
-  const [myReviews, setMyReviews]   = useState([]);
-  const [tours, setTours]           = useState([]);
-  const [loading, setLoading]       = useState(true);
-  const [showForm, setShowForm]     = useState(false);
+  const [myReviews, setMyReviews] = useState([]);
+  const [tours, setTours] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
-  const [editingId, setEditingId]   = useState(null);
-  const [success, setSuccess]       = useState("");
+  const [editingId, setEditingId] = useState(null);
+  const [success, setSuccess] = useState("");
 
   const [form, setForm] = useState({
     tourId: "", rating: 5, comment: "",
@@ -91,7 +91,7 @@ export default function Reviews() {
     try {
       const headers = { Authorization: `Bearer ${token}` };
       const [rRes, tRes] = await Promise.allSettled([
-        fetch(`${BASE_URL}/reviews/my-reviews`, { headers }).then(r => r.json()),
+        fetch(`${BASE_URL}/reviews/user/${user._id || user.id}`, { headers }).then(r => r.json()),
         fetch(`${BASE_URL}/tours`).then(r => r.json()),
       ]);
 
@@ -121,7 +121,7 @@ export default function Reviews() {
       const method = editingId ? "PUT" : "POST";
       const url = editingId
         ? `${BASE_URL}/reviews/${editingId}`
-        : `${BASE_URL}/reviews`;
+        : `${BASE_URL}/reviews/add`;
 
       const res = await fetch(url, {
         method,
@@ -129,13 +129,23 @@ export default function Reviews() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          ...form,
+          user: user?._id || user?.id,
+        }),
       });
       const data = await res.json();
+
+      if (!res.ok) {
+        alert(data.message || "Failed to submit review.");
+        setSubmitting(false);
+        return;
+      }
+
       const saved = data.review || data.data || {
         _id: editingId || Date.now().toString(),
         ...form,
-        tourId: tours.find(t => t._id === form.tourId) || { title: "Tour", city: "" },
+        tour: tours.find(t => t._id === form.tourId) || { tourName : "Tour", city: "" },
         createdAt: new Date().toISOString(),
       };
 
@@ -156,7 +166,7 @@ export default function Reviews() {
       const optimistic = {
         _id: editingId || Date.now().toString(),
         ...form,
-        tourId: tours.find(t => t._id === form.tourId) || { title: "Tour", city: "" },
+        tourId: tours.find(t => t._id === form.tourId) || { tourName : "Tour", city: "" },
         createdAt: new Date().toISOString(),
       };
       if (editingId) {
@@ -334,7 +344,7 @@ export default function Reviews() {
                   <option value="">-- Choose a tour you've been on --</option>
                   {tours.map(t => (
                     <option key={t._id} value={t._id}>
-                      {t.title} — {t.city || t.location}
+                      {t.tourName || t.title} — {t.city || t.location}
                     </option>
                   ))}
                 </select>
@@ -521,8 +531,8 @@ export default function Reviews() {
                       }}>
                         {review.createdAt
                           ? new Date(review.createdAt).toLocaleDateString("en-US", {
-                              month: "long", day: "numeric", year: "numeric",
-                            })
+                            month: "long", day: "numeric", year: "numeric",
+                          })
                           : ""}
                       </span>
                     </div>

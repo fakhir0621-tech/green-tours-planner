@@ -49,6 +49,13 @@ export default function Checkout() {
   const preGuests = location.state?.guests || 1;
   const preDate   = location.state?.date   || "";
 
+  // NEW — departure + seat data passed from the new TourDetails seat-map flow.
+  // If these are absent, Checkout behaves exactly like before (old free-date
+  // / guest-counter flow), so nothing breaks for any pages that don't pass them.
+  const departureData   = location.state?.departure      || null;
+  const selectedSeats   = location.state?.selectedSeats  || [];
+  const hasSeatSelection = departureData && selectedSeats.length > 0;
+
   const [step, setStep]               = useState(1);
   const [loading, setLoading]         = useState(false);
   const [booked, setBooked]           = useState(false);
@@ -62,8 +69,14 @@ export default function Checkout() {
     email:           user?.email || "",
     phone:           user?.phone || "",
     specialRequests: "",
-    guests:          preGuests,
-    date:            preDate,
+    // NEW — when seats were selected, guest count = number of seats and
+    // is not editable (per spec: "No separate guest counter"). Otherwise
+    // falls back to the original guest-counter behavior.
+    guests:          hasSeatSelection ? selectedSeats.length : preGuests,
+    // NEW — when a departure was selected, travel date comes from it
+    // and the date field is locked. Otherwise falls back to the
+    // original free date picker.
+    date:            hasSeatSelection ? departureData.date : preDate,
   });
 
   const [payment, setPayment] = useState({
@@ -94,7 +107,9 @@ export default function Checkout() {
     if (!details.firstName.trim()) e.firstName = "Required";
     if (!details.lastName.trim())  e.lastName  = "Required";
     if (!details.email.trim())     e.email     = "Required";
-    if (!details.date)             e.date      = "Please select a travel date";
+    // NEW — date is auto-filled and locked when a departure was selected,
+    // so we only require manual date validation in the old flow.
+    if (!hasSeatSelection && !details.date) e.date = "Please select a travel date";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -131,29 +146,49 @@ export default function Checkout() {
   const handleBook = async () => {
     setLoading(true);
     try {
+      const payload = {
+        user:              user._id || user.id,
+        tour:              tourData._id,
+        travelDate:        details.date,
+        numberOfPeople:    details.guests,
+        totalPrice:        grandTotal,
+        paymentMethod:     payment.method,
+        transactionId:     payment.transactionId.trim(),
+        paymentScreenshot: payment.screenshotB64,
+        specialRequests:   details.specialRequests,
+      };
+
+      // NEW — only attach departureId/seatSelections when the user came
+      // through the seat-map flow. Old-style bookings stay exactly as before.
+      if (hasSeatSelection) {
+        payload.departureId = departureData._id;
+        payload.seatSelections = selectedSeats.map(s => ({
+          vehicleNumber: s.vehicleNumber,
+          seatNumber:    s.seatNumber,
+        }));
+      }
+
       const res = await fetch(`${BASE_URL}/bookings/create`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          user:              user._id || user.id,
-          tour:              tourData._id,
-          travelDate:        details.date,
-          numberOfPeople:    details.guests,
-          totalPrice:        grandTotal,
-          paymentMethod:     payment.method,
-          transactionId:     payment.transactionId.trim(),
-          paymentScreenshot: payment.screenshotB64,
-          specialRequests:   details.specialRequests,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (res.ok) {
         setBookingRef(data.booking?._id || "");
         setInvoiceNo(data.booking?.invoiceNumber || "");
       } else {
+        // NEW — surface seat-conflict errors clearly instead of silently
+        // faking a success reference, since seats may have been taken
+        // by someone else while the user was filling the form.
+        if (res.status === 409) {
+          setErrors(prev => ({ ...prev, submit: data.message || "Some selected seats are no longer available." }));
+          setLoading(false);
+          return;
+        }
         setBookingRef("GTP-" + Math.random().toString(36).substr(2, 8).toUpperCase());
       }
     } catch {
@@ -227,7 +262,11 @@ export default function Checkout() {
           {[
             { label: "Tour",           val: tourData.title },
             { label: "Travel Date",    val: new Date(details.date).toLocaleDateString("en-PK", { month: "long", day: "numeric", year: "numeric" }) },
-            { label: "Guests",         val: `${details.guests} person${details.guests > 1 ? "s" : ""}` },
+            // NEW — show selected seats instead of plain guest count
+            // when this booking came from the seat-map flow.
+            ...(hasSeatSelection
+              ? [{ label: "Seats", val: selectedSeats.map(s => `B${s.vehicleNumber}-${s.seatNumber}`).join(", ") }]
+              : [{ label: "Guests", val: `${details.guests} person${details.guests > 1 ? "s" : ""}` }]),
             { label: "Total Paid",     val: `Rs. ${grandTotal.toLocaleString()}` },
             { label: "Payment Via",    val: selectedPM?.name },
             { label: "Transaction ID", val: payment.transactionId },
@@ -396,6 +435,28 @@ export default function Checkout() {
                 Traveler Details
               </h2>
 
+              {/* NEW — departure + seat summary banner, shown only when
+                  the user came through the seat-map flow */}
+              {hasSeatSelection && (
+                <div style={{
+                  background: "var(--green-50)", border: "1px solid var(--green-200)",
+                  borderRadius: "12px", padding: "16px 18px", marginBottom: "22px",
+                }}>
+                  <p style={{ fontSize: "12px", fontWeight: "700", color: "var(--green-700)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "8px" }}>
+                    🚌 Selected Departure
+                  </p>
+                  <p style={{ fontSize: "14px", color: "var(--text-primary)", fontWeight: "600" }}>
+                    {new Date(departureData.date).toLocaleDateString("en-PK", { month: "long", day: "numeric", year: "numeric" })} — {departureData.time}
+                  </p>
+                  <p style={{ fontSize: "13px", color: "var(--text-secondary)", marginTop: "2px" }}>
+                    {departureData.departureLocation} → {departureData.arrivalLocation} · {departureData.transportType}
+                  </p>
+                  <p style={{ fontSize: "13px", color: "var(--green-700)", fontWeight: "600", marginTop: "8px" }}>
+                    💺 Seats: {selectedSeats.map(s => `B${s.vehicleNumber}-${s.seatNumber}`).join(", ")}
+                  </p>
+                </div>
+              )}
+
               <div style={{
                 display: "grid",
                 gridTemplateColumns: "1fr 1fr",
@@ -444,49 +505,79 @@ export default function Checkout() {
                   />
                 </div>
 
+                {/* NEW — Travel Date is locked & read-only when a departure
+                    was selected (date comes from the departure schedule).
+                    Otherwise the original free date picker is shown. */}
                 <div>
                   <label style={labelStyle}>Travel Date *</label>
-                  <input type="date" value={details.date}
-                    onChange={e => setDetails({ ...details, date: e.target.value })}
-                    min={new Date().toISOString().split("T")[0]}
-                    style={inputStyle(errors.date)}
-                  />
-                  {errors.date && <p style={{ fontSize: "11px", color: "#dc2626", marginTop: "4px" }}>{errors.date}</p>}
+                  {hasSeatSelection ? (
+                    <div style={{
+                      ...inputStyle(false),
+                      display: "flex", alignItems: "center",
+                      background: "var(--bg-subtle)", color: "var(--text-secondary)",
+                      cursor: "not-allowed",
+                    }}>
+                      {new Date(details.date).toLocaleDateString("en-PK", { month: "long", day: "numeric", year: "numeric" })} (from departure)
+                    </div>
+                  ) : (
+                    <>
+                      <input type="date" value={details.date}
+                        onChange={e => setDetails({ ...details, date: e.target.value })}
+                        min={new Date().toISOString().split("T")[0]}
+                        style={inputStyle(errors.date)}
+                      />
+                      {errors.date && <p style={{ fontSize: "11px", color: "#dc2626", marginTop: "4px" }}>{errors.date}</p>}
+                    </>
+                  )}
                 </div>
 
+                {/* NEW — Guest counter is locked & read-only when seats
+                    were selected (guests = number of seats picked).
+                    Otherwise the original +/- counter is shown. */}
                 <div>
                   <label style={labelStyle}>Guests</label>
-                  <div style={{
-                    display: "flex", alignItems: "center",
-                    border: "1.5px solid var(--border)",
-                    borderRadius: "10px", overflow: "hidden",
-                  }}>
-                    <button type="button"
-                      onClick={() => setDetails({ ...details, guests: Math.max(1, details.guests - 1) })}
-                      style={{
-                        width: "44px", height: "46px",
-                        background: "var(--bg-subtle)", border: "none",
-                        fontSize: "18px", color: "var(--text-secondary)",
-                        borderRight: "1px solid var(--border)", cursor: "pointer",
-                      }}
-                    >−</button>
-                    <span style={{
-                      flex: 1, textAlign: "center",
-                      fontSize: "15px", fontWeight: "600",
-                      color: "var(--text-primary)",
+                  {hasSeatSelection ? (
+                    <div style={{
+                      ...inputStyle(false),
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      background: "var(--bg-subtle)", color: "var(--text-primary)",
+                      fontWeight: "600", cursor: "not-allowed",
                     }}>
-                      {details.guests}
-                    </span>
-                    <button type="button"
-                      onClick={() => setDetails({ ...details, guests: Math.min(20, details.guests + 1) })}
-                      style={{
-                        width: "44px", height: "46px",
-                        background: "var(--bg-subtle)", border: "none",
-                        fontSize: "18px", color: "var(--text-secondary)",
-                        borderLeft: "1px solid var(--border)", cursor: "pointer",
-                      }}
-                    >+</button>
-                  </div>
+                      {details.guests} (from seat selection)
+                    </div>
+                  ) : (
+                    <div style={{
+                      display: "flex", alignItems: "center",
+                      border: "1.5px solid var(--border)",
+                      borderRadius: "10px", overflow: "hidden",
+                    }}>
+                      <button type="button"
+                        onClick={() => setDetails({ ...details, guests: Math.max(1, details.guests - 1) })}
+                        style={{
+                          width: "44px", height: "46px",
+                          background: "var(--bg-subtle)", border: "none",
+                          fontSize: "18px", color: "var(--text-secondary)",
+                          borderRight: "1px solid var(--border)", cursor: "pointer",
+                        }}
+                      >−</button>
+                      <span style={{
+                        flex: 1, textAlign: "center",
+                        fontSize: "15px", fontWeight: "600",
+                        color: "var(--text-primary)",
+                      }}>
+                        {details.guests}
+                      </span>
+                      <button type="button"
+                        onClick={() => setDetails({ ...details, guests: Math.min(20, details.guests + 1) })}
+                        style={{
+                          width: "44px", height: "46px",
+                          background: "var(--bg-subtle)", border: "none",
+                          fontSize: "18px", color: "var(--text-secondary)",
+                          borderLeft: "1px solid var(--border)", cursor: "pointer",
+                        }}
+                      >+</button>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -803,7 +894,11 @@ export default function Checkout() {
                   { label: "Traveler",       val: `${details.firstName} ${details.lastName}` },
                   { label: "Email",          val: details.email },
                   { label: "Travel Date",    val: new Date(details.date).toLocaleDateString("en-PK", { month: "long", day: "numeric", year: "numeric" }) },
-                  { label: "Guests",         val: `${details.guests} person${details.guests > 1 ? "s" : ""}` },
+                  // NEW — show seats instead of plain guest count when
+                  // this booking came from the seat-map flow.
+                  ...(hasSeatSelection
+                    ? [{ label: "Seats", val: selectedSeats.map(s => `B${s.vehicleNumber}-${s.seatNumber}`).join(", ") }]
+                    : [{ label: "Guests", val: `${details.guests} person${details.guests > 1 ? "s" : ""}` }]),
                   { label: "Payment Via",    val: selectedPM?.name },
                   { label: "Transaction ID", val: payment.transactionId },
                 ].map((item, i) => (
@@ -832,6 +927,21 @@ export default function Checkout() {
                       border: "1px solid var(--border)",
                     }}
                   />
+                </div>
+              )}
+
+              {/* NEW — submit-time error (e.g. seat conflict) */}
+              {errors.submit && (
+                <div style={{
+                  background: "#fef2f2", border: "1px solid #fecaca",
+                  borderRadius: "10px", padding: "14px 18px",
+                  marginBottom: "20px",
+                  display: "flex", gap: "10px", alignItems: "flex-start",
+                }}>
+                  <span style={{ fontSize: "16px", flexShrink: 0 }}>⚠️</span>
+                  <p style={{ fontSize: "13px", color: "#dc2626", lineHeight: "1.6" }}>
+                    {errors.submit}
+                  </p>
                 </div>
               )}
 
@@ -918,10 +1028,31 @@ export default function Checkout() {
             📍 {tourData.city || tourData.location}
           </p>
 
+          {/* NEW — seat chips, shown only when seats were selected */}
+          {hasSeatSelection && (
+            <div style={{ marginBottom: "16px" }}>
+              <p style={{ fontSize: "12px", color: "var(--text-muted)", fontWeight: "600", marginBottom: "8px" }}>
+                Selected Seats
+              </p>
+              <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                {selectedSeats.map(s => (
+                  <span key={`${s.vehicleNumber}-${s.seatNumber}`} style={{
+                    fontSize: "11px", fontWeight: "700",
+                    padding: "4px 10px", borderRadius: "50px",
+                    background: "var(--green-50)", color: "var(--green-700)",
+                    border: "1px solid var(--green-200)",
+                  }}>
+                    B{s.vehicleNumber}-{s.seatNumber}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* PRICE BREAKDOWN */}
           <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "var(--text-muted)" }}>
-              <span>Rs. {price.toLocaleString()} × {details.guests} guest{details.guests > 1 ? "s" : ""}</span>
+              <span>Rs. {price.toLocaleString()} × {details.guests} {hasSeatSelection ? `seat${details.guests > 1 ? "s" : ""}` : `guest${details.guests > 1 ? "s" : ""}`}</span>
               <span>Rs. {subtotal.toLocaleString()}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "var(--text-muted)" }}>

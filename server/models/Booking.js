@@ -61,6 +61,25 @@ const bookingSchema = new mongoose.Schema(
       unique: true,
       sparse: true,
     },
+
+    /* =====================================================
+       NEW — DEPARTURE / SEAT MAP LINKAGE
+       Optional fields. Only populated when this booking
+       came from the new departure + seat-map flow. Older
+       bookings (free-date, guest-count only) simply won't
+       have these set, and nothing above is affected.
+       ===================================================== */
+    departureId: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null,
+    },
+    seatSelections: [
+      {
+        vehicleNumber: { type: Number, required: true },
+        seatNumber: { type: Number, required: true },
+        _id: false,
+      },
+    ],
   },
   { timestamps: true }
 );

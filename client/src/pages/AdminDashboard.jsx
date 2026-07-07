@@ -2,6 +2,433 @@ import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
+// ============================================================
+// DEPARTURE MANAGER MODAL — paste after imports, before AdminDashboard
+// ============================================================
+const TRANSPORT_TYPES = ["Coaster", "Bus", "Hiace", "Minivan", "SUV", "Train", "Other"];
+const EMPTY_DEP = {
+  date: "", time: "", departureLocation: "", arrivalLocation: "",
+  transportType: "Coaster", vehicleCount: "1", seatsPerVehicle: "25",
+};
+
+function DepartureManagerModal({ tour, onClose, token, onTourUpdated }) {
+  const [departures, setDepartures] = useState(Array.isArray(tour.departures) ? tour.departures : []);
+  const [adding, setAdding]         = useState(false);
+  const [editingIdx, setEditingIdx] = useState(null);
+  const [form, setForm]             = useState(EMPTY_DEP);
+  const [saving, setSaving]         = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
+  const [msg, setMsg]               = useState("");
+  const [error, setError]           = useState("");
+
+  const BASE = "http://localhost:5000/api";
+
+  const iStyle = {
+    width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb",
+    borderRadius: "8px", fontSize: "13px", color: "#1f2937",
+    background: "white", outline: "none", boxSizing: "border-box",
+  };
+  const lStyle = {
+    display: "block", fontSize: "11px", fontWeight: "600",
+    color: "#6b7280", marginBottom: "5px",
+    textTransform: "uppercase", letterSpacing: "0.5px",
+  };
+
+  const totalSeats = () => (Number(form.vehicleCount) || 0) * (Number(form.seatsPerVehicle) || 0);
+
+  const resetForm = () => { setForm(EMPTY_DEP); setAdding(false); setEditingIdx(null); setError(""); };
+
+  const validate = () => {
+    if (!form.date)                    { setError("Date is required.");               return false; }
+    if (!form.time)                    { setError("Time is required.");               return false; }
+    if (!form.departureLocation.trim()){ setError("Departure location is required."); return false; }
+    if (!form.arrivalLocation.trim())  { setError("Arrival location is required.");   return false; }
+    if (Number(form.vehicleCount) < 1) { setError("At least 1 vehicle required.");    return false; }
+    if (Number(form.seatsPerVehicle) < 1){ setError("At least 1 seat required.");     return false; }
+    return true;
+  };
+
+  const handleAdd = async () => {
+    if (!validate()) return;
+    setSaving(true); setError("");
+    try {
+      const res = await fetch(`${BASE}/tours/${tour._id}/departures`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          date: form.date, time: form.time,
+          departureLocation: form.departureLocation.trim(),
+          arrivalLocation: form.arrivalLocation.trim(),
+          transportType: form.transportType,
+          vehicleCount: Number(form.vehicleCount),
+          seatsPerVehicle: Number(form.seatsPerVehicle),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to add departure.");
+      const updated = data.tour || data.updatedTour || data;
+      setDepartures(updated.departures || []);
+      onTourUpdated(updated);
+      resetForm();
+      setMsg("✅ Departure added! Seat map generated automatically.");
+      setTimeout(() => setMsg(""), 3000);
+    } catch (err) { setError(err.message); }
+    finally { setSaving(false); }
+  };
+
+  const handleOpenEdit = (dep, idx) => {
+    setEditingIdx(idx); setAdding(false);
+    setForm({
+      date: dep.date || "", time: dep.time || "",
+      departureLocation: dep.departureLocation || "",
+      arrivalLocation: dep.arrivalLocation || "",
+      transportType: dep.transportType || "Coaster",
+      vehicleCount: String(dep.vehicleCount || "1"),
+      seatsPerVehicle: String(dep.seatsPerVehicle || "25"),
+    });
+    setError("");
+  };
+
+  const handleSaveEdit = async () => {
+    if (!validate()) return;
+    const dep = departures[editingIdx];
+    if (!dep?._id) return;
+    setSaving(true); setError("");
+    try {
+      const res = await fetch(`${BASE}/tours/${tour._id}/departures/${dep._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          date: form.date, time: form.time,
+          departureLocation: form.departureLocation.trim(),
+          arrivalLocation: form.arrivalLocation.trim(),
+          transportType: form.transportType,
+          vehicleCount: Number(form.vehicleCount),
+          seatsPerVehicle: Number(form.seatsPerVehicle),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to update departure.");
+      const updated = data.tour || data.updatedTour || data;
+      setDepartures(updated.departures || []);
+      onTourUpdated(updated);
+      resetForm();
+      setMsg("✅ Departure updated!");
+      setTimeout(() => setMsg(""), 3000);
+    } catch (err) { setError(err.message); }
+    finally { setSaving(false); }
+  };
+
+  const handleDelete = async (dep) => {
+    if (!window.confirm(`Delete departure on ${dep.date}? This cannot be undone.`)) return;
+    setDeletingId(dep._id);
+    try {
+      const res = await fetch(`${BASE}/tours/${tour._id}/departures/${dep._id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to delete.");
+      const updated = data.tour || data.updatedTour || data;
+      setDepartures(updated.departures || []);
+      onTourUpdated(updated);
+      if (editingIdx !== null) resetForm();
+      setMsg("✅ Departure deleted.");
+      setTimeout(() => setMsg(""), 3000);
+    } catch (err) { setError(err.message); }
+    finally { setDeletingId(null); }
+  };
+
+  const formatDate = (s) => {
+    try { return new Date(s + "T00:00:00").toLocaleDateString("en-PK", { day: "numeric", month: "short", year: "numeric" }); }
+    catch { return s; }
+  };
+  const formatTime = (s) => {
+    if (!s) return "—";
+    if (s.toLowerCase().includes("am") || s.toLowerCase().includes("pm")) return s;
+    const [h, m] = s.split(":").map(Number);
+    if (isNaN(h) || isNaN(m)) return s;
+    const ap = h >= 12 ? "PM" : "AM"; const hr = h % 12 || 12;
+    return `${hr}:${m.toString().padStart(2, "0")} ${ap}`;
+  };
+  const getRemainingSeats = (dep) => {
+    if (!dep.seatMap?.length) return dep.totalSeats || 0;
+    return dep.seatMap.filter(s => s.status === "available").length;
+  };
+
+  const showForm = adding || editingIdx !== null;
+
+  return (
+    <div onClick={e => e.target === e.currentTarget && onClose()} style={{
+      position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      zIndex: 10001, padding: "20px", backdropFilter: "blur(3px)",
+    }}>
+      <div style={{
+        background: "white", borderRadius: "20px", width: "100%",
+        maxWidth: "780px", maxHeight: "92vh", overflow: "hidden",
+        display: "flex", flexDirection: "column",
+        boxShadow: "0 25px 60px rgba(0,0,0,0.3)",
+      }}>
+
+        {/* HEADER */}
+        <div style={{
+          background: "linear-gradient(135deg, #1e3a5f, #0f2240)",
+          padding: "22px 28px", flexShrink: 0,
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+        }}>
+          <div>
+            <p style={{ fontSize: "10px", letterSpacing: "3px", color: "#93c5fd", fontWeight: "600", textTransform: "uppercase", marginBottom: "4px" }}>
+              DEPARTURE MANAGEMENT
+            </p>
+            <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: "19px", fontWeight: "700", color: "white" }}>
+              🚌 {tour.tourName}
+            </h2>
+            <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "12px", marginTop: "2px" }}>
+              {departures.length} departure{departures.length !== 1 ? "s" : ""} scheduled
+            </p>
+          </div>
+          <button onClick={onClose} style={{
+            background: "rgba(255,255,255,0.12)", border: "none",
+            color: "white", width: "36px", height: "36px",
+            borderRadius: "50%", fontSize: "18px", cursor: "pointer",
+          }}>✕</button>
+        </div>
+
+        {/* MSG / ERROR */}
+        {(msg || error) && (
+          <div style={{
+            padding: "10px 28px", flexShrink: 0,
+            background: error ? "#fef2f2" : "#f0fdf4",
+            borderBottom: `1px solid ${error ? "#fecaca" : "#bbf7d0"}`,
+          }}>
+            <p style={{ fontSize: "13px", fontWeight: "500", color: error ? "#dc2626" : "#16a34a" }}>
+              {error ? `⚠️ ${error}` : msg}
+            </p>
+          </div>
+        )}
+
+        {/* BODY */}
+        <div style={{ overflowY: "auto", flex: 1, padding: "24px 28px" }}>
+
+          {/* ADD / EDIT FORM */}
+          {showForm && (
+            <div style={{
+              background: "#f8fafc",
+              border: `2px solid ${editingIdx !== null ? "#bfdbfe" : "#bbf7d0"}`,
+              borderRadius: "14px", padding: "20px 22px", marginBottom: "24px",
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "18px" }}>
+                <h3 style={{ fontSize: "15px", fontWeight: "700", color: "#1f2937" }}>
+                  {editingIdx !== null ? "✏️ Edit Departure" : "➕ Add New Departure"}
+                </h3>
+                <button onClick={resetForm} style={{ background: "none", border: "none", fontSize: "18px", cursor: "pointer", color: "#9ca3af" }}>✕</button>
+              </div>
+
+              {/* DATE + TIME */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
+                <div>
+                  <label style={lStyle}>Departure Date *</label>
+                  <input type="date" value={form.date} min={new Date().toISOString().split("T")[0]}
+                    onChange={e => { setForm(p => ({ ...p, date: e.target.value })); setError(""); }}
+                    style={iStyle} />
+                </div>
+                <div>
+                  <label style={lStyle}>Departure Time *</label>
+                  <input type="time" value={form.time}
+                    onChange={e => { setForm(p => ({ ...p, time: e.target.value })); setError(""); }}
+                    style={iStyle} />
+                </div>
+              </div>
+
+              {/* LOCATIONS */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
+                <div>
+                  <label style={lStyle}>Departure Location *</label>
+                  <input type="text" value={form.departureLocation} placeholder="e.g. Faizabad, Islamabad"
+                    onChange={e => { setForm(p => ({ ...p, departureLocation: e.target.value })); setError(""); }}
+                    style={iStyle} />
+                </div>
+                <div>
+                  <label style={lStyle}>Arrival Location *</label>
+                  <input type="text" value={form.arrivalLocation} placeholder="e.g. Hunza Valley"
+                    onChange={e => { setForm(p => ({ ...p, arrivalLocation: e.target.value })); setError(""); }}
+                    style={iStyle} />
+                </div>
+              </div>
+
+              {/* TRANSPORT + VEHICLES + SEATS */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "14px", marginBottom: "16px" }}>
+                <div>
+                  <label style={lStyle}>Transport Type *</label>
+                  <select value={form.transportType} onChange={e => setForm(p => ({ ...p, transportType: e.target.value }))} style={{ ...iStyle, cursor: "pointer" }}>
+                    {TRANSPORT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={lStyle}>Number of Vehicles *</label>
+                  <input type="number" min="1" max="20" value={form.vehicleCount}
+                    onChange={e => { setForm(p => ({ ...p, vehicleCount: e.target.value })); setError(""); }}
+                    style={iStyle} />
+                </div>
+                <div>
+                  <label style={lStyle}>Seats per Vehicle *</label>
+                  <input type="number" min="1" max="100" value={form.seatsPerVehicle}
+                    onChange={e => { setForm(p => ({ ...p, seatsPerVehicle: e.target.value })); setError(""); }}
+                    style={iStyle} />
+                </div>
+              </div>
+
+              {/* AUTO-TOTAL PREVIEW */}
+              {totalSeats() > 0 && (
+                <div style={{
+                  background: "#eff6ff", border: "1px solid #bfdbfe",
+                  borderRadius: "10px", padding: "12px 16px", marginBottom: "16px",
+                  display: "flex", alignItems: "center", gap: "10px",
+                }}>
+                  <span style={{ fontSize: "18px" }}>💺</span>
+                  <div>
+                    <p style={{ fontSize: "13px", fontWeight: "700", color: "#1d4ed8" }}>
+                      {form.vehicleCount} {form.transportType}(s) × {form.seatsPerVehicle} seats = <strong>{totalSeats()} Total Seats</strong>
+                    </p>
+                    <p style={{ fontSize: "11px", color: "#3b82f6", marginTop: "2px" }}>
+                      Seat map will be auto-generated on save.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* BUTTONS */}
+              <div style={{ display: "flex", gap: "10px" }}>
+                <button onClick={editingIdx !== null ? handleSaveEdit : handleAdd} disabled={saving} style={{
+                  background: saving ? "#93c5fd" : editingIdx !== null ? "#1d4ed8" : "#16a34a",
+                  color: "white", border: "none", padding: "10px 28px",
+                  borderRadius: "50px", fontSize: "13px", fontWeight: "600",
+                  cursor: saving ? "not-allowed" : "pointer",
+                }}>
+                  {saving ? "Saving..." : editingIdx !== null ? "💾 Save Changes" : "🚌 Add Departure"}
+                </button>
+                <button onClick={resetForm} style={{
+                  background: "white", color: "#6b7280", border: "1.5px solid #e5e7eb",
+                  padding: "10px 22px", borderRadius: "50px", fontSize: "13px", cursor: "pointer",
+                }}>Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {/* ADD BUTTON */}
+          {!showForm && (
+            <button onClick={() => { setAdding(true); setEditingIdx(null); setForm(EMPTY_DEP); setError(""); setMsg(""); }} style={{
+              background: "#16a34a", color: "white", border: "none",
+              padding: "11px 24px", borderRadius: "50px", fontSize: "13px",
+              fontWeight: "600", cursor: "pointer", marginBottom: "20px",
+              boxShadow: "0 4px 12px rgba(22,163,74,0.3)",
+            }}>+ Add New Departure</button>
+          )}
+
+          {/* DEPARTURES LIST */}
+          {departures.length === 0 ? (
+            <div style={{
+              textAlign: "center", padding: "48px 24px",
+              background: "#f9fafb", borderRadius: "14px",
+              border: "1.5px dashed #e5e7eb",
+            }}>
+              <div style={{ fontSize: "40px", marginBottom: "12px" }}>🚌</div>
+              <p style={{ fontSize: "15px", fontWeight: "600", color: "#374151", marginBottom: "6px" }}>No departures yet</p>
+              <p style={{ fontSize: "13px", color: "#9ca3af" }}>Add the first departure to enable seat-based booking.</p>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              {departures.map((dep, idx) => {
+                const remaining = getRemainingSeats(dep);
+                const total = dep.totalSeats || 0;
+                const booked = total - remaining;
+                const pct = total > 0 ? Math.round((booked / total) * 100) : 0;
+                const isEditing = editingIdx === idx;
+                return (
+                  <div key={dep._id || idx} style={{
+                    background: "white",
+                    border: `1.5px solid ${isEditing ? "#bfdbfe" : "#e5e7eb"}`,
+                    borderRadius: "14px", padding: "16px 20px",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "12px" }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "6px" }}>
+                          <span style={{ background: "#1e3a5f", color: "white", fontSize: "12px", fontWeight: "700", padding: "3px 12px", borderRadius: "50px" }}>
+                            {formatDate(dep.date)}
+                          </span>
+                          <span style={{ background: "#f0fdf4", color: "#16a34a", fontSize: "12px", fontWeight: "700", padding: "3px 12px", borderRadius: "50px", border: "1px solid #bbf7d0" }}>
+                            🕐 {formatTime(dep.time)}
+                          </span>
+                          <span style={{ background: "#eff6ff", color: "#1d4ed8", fontSize: "11px", fontWeight: "600", padding: "2px 10px", borderRadius: "50px", border: "1px solid #bfdbfe" }}>
+                            🚌 {dep.transportType} · {dep.vehicleCount} vehicle{dep.vehicleCount > 1 ? "s" : ""}
+                          </span>
+                        </div>
+                        <p style={{ fontSize: "13px", color: "#374151", fontWeight: "500", marginBottom: "8px" }}>
+                          📍 {dep.departureLocation} → 🏔️ {dep.arrivalLocation}
+                        </p>
+                        <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
+                          {[
+                            { label: "Total", val: total, color: "#6b7280" },
+                            { label: "Booked", val: booked, color: "#dc2626" },
+                            { label: "Available", val: remaining, color: remaining <= 5 ? "#dc2626" : "#16a34a" },
+                            { label: "Occupancy", val: `${pct}%`, color: pct >= 80 ? "#dc2626" : "#16a34a" },
+                          ].map(s => (
+                            <div key={s.label} style={{ textAlign: "center" }}>
+                              <div style={{ fontSize: "15px", fontWeight: "700", color: s.color }}>{s.val}</div>
+                              <div style={{ fontSize: "10px", color: "#9ca3af" }}>{s.label}</div>
+                            </div>
+                          ))}
+                        </div>
+                        {/* Occupancy bar */}
+                        <div style={{ marginTop: "8px", maxWidth: "260px", height: "5px", background: "#f1f5f9", borderRadius: "3px", overflow: "hidden" }}>
+                          <div style={{ height: "100%", width: `${pct}%`, background: pct >= 80 ? "#ef4444" : "#16a34a", borderRadius: "3px" }} />
+                        </div>
+                      </div>
+                      {/* ACTION BUTTONS */}
+                      <div style={{ display: "flex", gap: "6px" }}>
+                        <button onClick={() => isEditing ? resetForm() : handleOpenEdit(dep, idx)} style={{
+                          background: "#eff6ff", color: "#1d4ed8", border: "1.5px solid #bfdbfe",
+                          padding: "6px 14px", borderRadius: "50px", fontSize: "11px", fontWeight: "600", cursor: "pointer",
+                        }}>
+                          {isEditing ? "✕ Cancel" : "✏️ Edit"}
+                        </button>
+                        <button onClick={() => handleDelete(dep)} disabled={deletingId === dep._id} style={{
+                          background: "#fef2f2", color: "#dc2626", border: "1.5px solid #fecaca",
+                          padding: "6px 14px", borderRadius: "50px", fontSize: "11px", fontWeight: "600",
+                          cursor: deletingId === dep._id ? "not-allowed" : "pointer",
+                        }}>
+                          {deletingId === dep._id ? "..." : "🗑️ Delete"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* FOOTER */}
+        <div style={{
+          padding: "14px 28px", borderTop: "1px solid #e5e7eb",
+          background: "#f9fafb", flexShrink: 0,
+          display: "flex", justifyContent: "flex-end",
+        }}>
+          <button onClick={onClose} style={{
+            background: "white", color: "#6b7280", border: "1.5px solid #e5e7eb",
+            padding: "9px 22px", borderRadius: "50px", fontSize: "13px", cursor: "pointer",
+          }}>Done</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+// ============================================================
+// END DEPARTURE MANAGER MODAL
+// ============================================================
+
 const BASE_URL = "http://localhost:5000/api";
 
 const FALLBACK_STATS = {
@@ -416,6 +843,7 @@ export default function AdminDashboard() {
   const [noteTarget, setNoteTarget]               = useState(null);
   const [previewScreenshot, setPreviewScreenshot] = useState(null);
   const [showTourForm, setShowTourForm]           = useState(false);
+  const [departureManagerTour, setDepartureManagerTour] = useState(null);
   const [editingTour, setEditingTour]             = useState(null);
   const [modFilter, setModFilter]                 = useState("all");
   const [modSearch, setModSearch]                 = useState("");
@@ -497,7 +925,7 @@ export default function AdminDashboard() {
         fetch(`${BASE_URL}/users/all`,    { headers }).then(r => r.json()),
         fetch(`${BASE_URL}/tours`,        { headers }).then(r => r.json()),
         fetch(`${BASE_URL}/bookings/all`, { headers }).then(r => r.json()),
-        fetch(`${BASE_URL}/reviews`,      { headers }).then(r => r.json()),
+        fetch(`${BASE_URL}/reviews/all`,      { headers }).then(r => r.json()),
       ]);
       const userList    = uRes.status === "fulfilled" ? (Array.isArray(uRes.value) ? uRes.value : uRes.value.users || []) : [];
       const tourList    = tRes.status === "fulfilled" ? (tRes.value.tours || tRes.value.data || (Array.isArray(tRes.value) ? tRes.value : [])) : [];
@@ -1012,6 +1440,17 @@ export default function AdminDashboard() {
                           <td style={tdStyle}><div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
                             <Link to={`/tours/${t._id}`} target="_blank" style={{ background: "var(--green-50)", color: "var(--green-700)", border: "1.5px solid var(--green-200)", padding: "5px 10px", borderRadius: "50px", fontSize: "11px", fontWeight: "500", textDecoration: "none", whiteSpace: "nowrap" }}>👁️ View</Link>
                             <button onClick={() => openEditTour(t)} style={{ background: "#eff6ff", color: "#1d4ed8", border: "1.5px solid #bfdbfe", padding: "5px 10px", borderRadius: "50px", fontSize: "11px", fontWeight: "600", cursor: "pointer", whiteSpace: "nowrap" }} onMouseEnter={e => { e.currentTarget.style.background = "#1d4ed8"; e.currentTarget.style.color = "white"; }} onMouseLeave={e => { e.currentTarget.style.background = "#eff6ff"; e.currentTarget.style.color = "#1d4ed8"; }}>✏️ Edit</button>
+                            <button
+                              onClick={() => setDepartureManagerTour(t)}
+                              style={{
+                              background: "#eff6ff", color: "#1d4ed8",
+                              border: "1.5px solid #bfdbfe",
+                              padding: "6px 14px", borderRadius: "50px",
+                              fontSize: "11px", fontWeight: "600", cursor: "pointer",
+                              }}
+                              >
+                              🚌 Departures ({(t.departures || []).length})
+                            </button>
                             <button onClick={() => deleteTour(t._id)} disabled={deletingId === t._id} style={{ background: deletingId === t._id ? "var(--gray-100)" : "#fef2f2", color: deletingId === t._id ? "var(--gray-400)" : "#dc2626", border: `1.5px solid ${deletingId === t._id ? "var(--gray-200)" : "#fecaca"}`, padding: "5px 10px", borderRadius: "50px", fontSize: "11px", fontWeight: "600", cursor: deletingId === t._id ? "not-allowed" : "pointer", whiteSpace: "nowrap" }} onMouseEnter={e => { if (deletingId !== t._id) { e.currentTarget.style.background = "#dc2626"; e.currentTarget.style.color = "white"; } }} onMouseLeave={e => { if (deletingId !== t._id) { e.currentTarget.style.background = "#fef2f2"; e.currentTarget.style.color = "#dc2626"; } }}>{deletingId === t._id ? "..." : "🗑️ Delete"}</button>
                           </div></td>
                         </tr>
@@ -1691,12 +2130,25 @@ export default function AdminDashboard() {
           </div>
         )}
         {/* ---- END: SUPPORT MESSAGES TAB ---- */}
-
       </div>
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes bounce-dot { 0%, 80%, 100% { transform: scale(0.7); opacity: 0.5; } 40% { transform: scale(1); opacity: 1; } }
       `}</style>
+
+     {/* DEPARTURE MANAGER MODAL */}
+{departureManagerTour && (
+  <DepartureManagerModal
+    tour={departureManagerTour}
+    token={token}
+    onClose={() => setDepartureManagerTour(null)}
+    onTourUpdated={(updatedTour) => {
+      setTours(prev => prev.map(t => t._id === updatedTour._id ? updatedTour : t));
+      setDepartureManagerTour(updatedTour);
+    }}
+  />
+)}
+
     </div>
   );
 }
