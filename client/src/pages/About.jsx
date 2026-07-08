@@ -3,25 +3,34 @@ import { Link } from "react-router-dom";
 
 const TEAM = [
   {
-    name: "Sarah Mitchell", role: "Founder & CEO",
-    bio: "15 years leading eco-tourism adventures across 6 continents.",
-    avatar: "S", color: "#16a34a",
+    name: "Muhammad Furqan",
+    role: "Chief Executive Officer (CEO)",
+    bio: "Founder and CEO of Green Tours Planner, leading the company's vision, operations, and commitment to providing exceptional travel experiences across Pakistan.",
+    avatar: "M",
+    color: "#16a34a",
   },
   {
-    name: "James Okafor", role: "Head of Tours",
-    bio: "Certified mountain guide and wildlife conservation expert.",
-    avatar: "J", color: "#0891b2",
+    name: "Mubarak Mehdi",
+    role: "Director / Managing Director",
+    bio: "Oversees business strategy, partnerships, and organizational management while ensuring high-quality tourism services for travelers.",
+    avatar: "M",
+    color: "#0891b2",
   },
   {
-    name: "Priya Sharma", role: "Customer Experience",
-    bio: "Dedicated to making every journey seamless and unforgettable.",
-    avatar: "P", color: "#7c3aed",
+    name: "Waheed Ahmed",
+    role: "Operations Manager",
+    bio: "Manages daily tour operations, travel logistics, and coordination to ensure smooth and well-organized trips for every customer.",
+    avatar: "W",
+    color: "#7c3aed",
   },
   {
-    name: "Carlos Rivera", role: "Lead Tour Guide",
-    bio: "Speaks 4 languages and has guided 500+ tours worldwide.",
-    avatar: "C", color: "#db6b1f",
+    name: "Osama Bin Rafiq",
+    role: "Tour Operations Coordinator",
+    bio: "Coordinates tour planning, customer support, and travel arrangements to deliver reliable and memorable travel experiences.",
+    avatar: "O",
+    color: "#db6b1f",
   },
+
 ];
 
 const VALUES = [

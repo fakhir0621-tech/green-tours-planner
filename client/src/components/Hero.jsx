@@ -21,7 +21,7 @@ const heroSlides = [
   },
   {
     id: 3,
-    image: "https://images.unsplash.com/photo-1593417376544-4c4201061e22?q=80&w=1025&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+    image: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQLTsq9fbKwz6ESl_wDV0NCsDNNmCSGWfcho3KWh6sEmw&s=10",
     tag: "OCEAN ESCAPES",
     headline: "Where Mountains Meets Sky",
     sub: "Mountains All Over Pakistan",
