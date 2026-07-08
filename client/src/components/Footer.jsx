@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { useState } from "react";
+import logo from "../assets/green tours logo.png";
 
 
 export default function Footer() {
@@ -150,25 +151,28 @@ export default function Footer() {
       {/* MAIN FOOTER GRID */}
       <div className="footer-main-grid">
 
-        {/* BRAND COLUMN */}
-        <div className="footer-col-brand">
-          <Link to="/" style={{
-            display: "flex", alignItems: "center", gap: "10px",
-            fontFamily: "'Playfair Display', serif",
-            fontSize: "22px", fontWeight: "700",
-            color: "white", marginBottom: "16px",
-            textDecoration: "none",
-          }}>
-            <div style={{
-              width: "36px", height: "36px",
-              background: "linear-gradient(135deg, var(--green-500), var(--green-700))",
-              borderRadius: "9px",
-              display: "flex", alignItems: "center",
-              justifyContent: "center", fontSize: "18px",
-              flexShrink: 0,
-            }}>🌿</div>
-            GreenTours
-          </Link>
+{/* BRAND COLUMN */}
+<div className="footer-col-brand">
+  <Link
+    to="/"
+    style={{
+      display: "flex",
+      alignItems: "center",
+      textDecoration: "none",
+      marginBottom: "16px",
+    }}
+  >
+    <img
+      src={logo}
+      alt="Green Tours Planner"
+      style={{
+        height: "70px",
+        width: "auto",
+        objectFit: "contain",
+        display: "block",
+      }}
+    />
+  </Link>
           <p className="footer-brand-desc" style={{
             fontSize: "14px", lineHeight: "1.9",
             color: "rgba(255,255,255,0.55)",

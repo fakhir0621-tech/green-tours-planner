@@ -29,12 +29,16 @@ const handleSubmit = async (e) => {
     const data = await authAPI.login(form);
     // Your backend returns token at top level: { token, _id, name, email, role }
     if (data.token) {
-      const user = {
-        _id: data._id,
-        name: data.name,
-        email: data.email,
-        role: data.role,
-      };
+const user = {
+  _id: data._id,
+  name: data.name,
+  email: data.email,
+  phone: data.phone,
+  address: data.address,
+  photo: data.photo,
+  role: data.role,
+};
+
       login(user, data.token);
       navigate("/");
     } else {

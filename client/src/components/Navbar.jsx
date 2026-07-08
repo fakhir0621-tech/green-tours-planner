@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
-
+import logo from "../assets/green tours planner.png";
 
 export default function Navbar() {
   const [scrolled,   setScrolled]   = useState(false);
@@ -189,23 +189,26 @@ export default function Navbar() {
       {/* ── NAVBAR ── */}
       <nav style={navStyle}>
 
-        {/* LOGO */}
-        <Link to="/" style={{
-          display: "flex", alignItems: "center", gap: "10px",
-          fontFamily: "'Playfair Display', serif", fontWeight: "700",
-          color: logoColor, transition: "color 0.4s",
-          textDecoration: "none", flexShrink: 0,
-        }}>
-          <div style={{
-            width: "36px", height: "36px", flexShrink: 0,
-            background: "linear-gradient(135deg, var(--green-500), var(--green-700))",
-            borderRadius: "9px", display: "flex", alignItems: "center",
-            justifyContent: "center", fontSize: "18px",
-          }}>🌿</div>
-          <span className="nav-logo-text" style={{ fontSize: "22px" }}>
-            GreenToursPlanner
-          </span>
-        </Link>
+{/* LOGO */}
+<Link
+  to="/"
+  style={{
+    display: "flex",
+    alignItems: "center",
+    textDecoration: "none",
+    flexShrink: 0,
+  }}
+>
+  <img
+    src={logo}
+    alt="Green Tours Planner"
+    style={{
+      height: "110px",
+      width: "auto",
+      objectFit: "contain",
+    }}
+  />
+</Link>
 
         {/* ── NAV LINKS (desktop) ── */}
         <ul className="nav-desktop-links" style={{
@@ -235,81 +238,46 @@ export default function Navbar() {
         {/* ── RIGHT SIDE (desktop) ── */}
         <div className="nav-desktop-right" style={{ gap: "10px", alignItems: "center" }}>
 
-          {/* MODE DROPDOWN — unchanged */}
-          <div ref={modeRef} style={{ position: "relative" }}>
-            <button
-              onClick={() => setModeOpen(prev => !prev)}
-              style={{
-                display: "flex", alignItems: "center", gap: "6px",
-                background: solidNav ? "var(--bg-subtle)" : "rgba(255,255,255,0.12)",
-                border: solidNav ? "1.5px solid var(--border)" : "1.5px solid rgba(255,255,255,0.25)",
-                borderRadius: "50px", padding: "7px 14px",
-                cursor: "pointer", transition: "all 0.2s",
-                fontSize: "13px", fontWeight: "500",
-                color: solidNav ? "var(--text-secondary)" : "rgba(255,255,255,0.9)",
-              }}
-              onMouseEnter={e => e.currentTarget.style.borderColor = "var(--green-400)"}
-              onMouseLeave={e => e.currentTarget.style.borderColor = solidNav ? "var(--border)" : "rgba(255,255,255,0.25)"}
-            >
-              {darkMode ? "🌙" : "☀️"}
-              <span>Mode</span>
-              <span style={{ fontSize: "9px", transition: "transform 0.2s", transform: modeOpen ? "rotate(180deg)" : "rotate(0deg)" }}>▼</span>
-            </button>
+{/* MODE TOGGLE BUTTON */}
+<div style={{ position: "relative" }}>
+  <button
+    onClick={toggleTheme}
+    style={{
+      display: "flex",
+      alignItems: "center",
+      gap: "6px",
+      background: solidNav
+        ? "var(--bg-subtle)"
+        : "rgba(255,255,255,0.12)",
+      border: solidNav
+        ? "1.5px solid var(--border)"
+        : "1.5px solid rgba(255,255,255,0.25)",
+      borderRadius: "50px",
+      padding: "7px 14px",
+      cursor: "pointer",
+      transition: "all 0.2s",
+      fontSize: "13px",
+      fontWeight: "500",
+      color: solidNav
+        ? "var(--text-secondary)"
+        : "rgba(255,255,255,0.9)",
+    }}
+    onMouseEnter={(e) => {
+      e.currentTarget.style.borderColor = "var(--green-400)";
+    }}
+    onMouseLeave={(e) => {
+      e.currentTarget.style.borderColor = solidNav
+        ? "var(--border)"
+        : "rgba(255,255,255,0.25)";
+    }}
+  >
+    <span style={{ fontSize: "16px" }}>
+      {darkMode ? "🌙" : "☀️"}
+    </span>
 
-            {modeOpen && (
-              <div style={{
-                position: "absolute", top: "calc(100% + 8px)", right: 0,
-                background: "var(--bg-card)", border: "1px solid var(--border)",
-                borderRadius: "12px", boxShadow: "0 8px 24px var(--shadow-md)",
-                minWidth: "150px", overflow: "hidden", zIndex: 300,
-                animation: "fadeSlideDown 0.15s ease",
-              }}>
-                <button
-                  onClick={() => { if (darkMode) toggleTheme(); setModeOpen(false); }}
-                  style={{
-                    display: "flex", alignItems: "center", gap: "10px",
-                    width: "100%", padding: "12px 16px",
-                    border: "none", textAlign: "left",
-                    background: !darkMode ? "var(--green-50)" : "transparent",
-                    color: !darkMode ? "var(--green-700)" : "var(--text-secondary)",
-                    fontSize: "13px", fontWeight: !darkMode ? "600" : "400",
-                    cursor: "pointer", transition: "background 0.15s",
-                    borderBottom: "1px solid var(--border)",
-                  }}
-                  onMouseEnter={e => { if (darkMode) e.currentTarget.style.background = "var(--bg-subtle)"; }}
-                  onMouseLeave={e => { if (darkMode) e.currentTarget.style.background = "transparent"; }}
-                >
-                  <span style={{ fontSize: "16px" }}>☀️</span>
-                  <div>
-                    <div>Light Mode</div>
-                    <div style={{ fontSize: "11px", color: !darkMode ? "var(--green-600)" : "var(--text-muted)", marginTop: "1px" }}>Clean white theme</div>
-                  </div>
-                  {!darkMode && <span style={{ marginLeft: "auto", fontSize: "12px", color: "var(--green-600)", fontWeight: "700" }}>✓</span>}
-                </button>
-                <button
-                  onClick={() => { if (!darkMode) toggleTheme(); setModeOpen(false); }}
-                  style={{
-                    display: "flex", alignItems: "center", gap: "10px",
-                    width: "100%", padding: "12px 16px",
-                    border: "none", textAlign: "left",
-                    background: darkMode ? "var(--green-50)" : "transparent",
-                    color: darkMode ? "var(--green-700)" : "var(--text-secondary)",
-                    fontSize: "13px", fontWeight: darkMode ? "600" : "400",
-                    cursor: "pointer", transition: "background 0.15s",
-                  }}
-                  onMouseEnter={e => { if (!darkMode) e.currentTarget.style.background = "var(--bg-subtle)"; }}
-                  onMouseLeave={e => { if (!darkMode) e.currentTarget.style.background = "transparent"; }}
-                >
-                  <span style={{ fontSize: "16px" }}>🌙</span>
-                  <div>
-                    <div>Dark Mode</div>
-                    <div style={{ fontSize: "11px", color: darkMode ? "var(--green-600)" : "var(--text-muted)", marginTop: "1px" }}>Easy on the eyes</div>
-                  </div>
-                  {darkMode && <span style={{ marginLeft: "auto", fontSize: "12px", color: "var(--green-600)", fontWeight: "700" }}>✓</span>}
-                </button>
-              </div>
-            )}
-          </div>
+
+  </button>
+</div>
 
           {/* ── AUTH AREA — FIXED DROPDOWN ── */}
           {user ? (

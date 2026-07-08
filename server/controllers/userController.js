@@ -47,14 +47,17 @@ const loginUser = async (req, res) => {
       }
       user.lastLogin = new Date();
       await user.save();
-      res.json({
-        message: "Login successful",
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        token: generateToken(user._id),
-      });
+res.json({
+  message: "Login successful",
+  _id: user._id,
+  name: user.name,
+  email: user.email,
+  phone: user.phone,
+  address: user.address,
+  photo: user.photo,
+  role: user.role,
+  token: generateToken(user._id),
+});
     } else {
       res.status(401).json({ message: "Invalid email or password" });
     }
@@ -78,15 +81,28 @@ const getUserProfile = async (req, res) => {
 const updateUserProfile = async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
-    if (!user) return res.status(404).json({ message: "User not found" });
-    user.name    = req.body.name    || user.name;
-    user.email   = req.body.email   || user.email;
-    user.phone   = req.body.phone   || user.phone;
+
+    if (!user)
+      return res.status(404).json({ message: "User not found" });
+
+    user.name = req.body.name || user.name;
+    user.email = req.body.email || user.email;
+    user.phone = req.body.phone || user.phone;
     user.address = req.body.address || user.address;
+
+    // NEW
+    user.photo = req.body.photo || user.photo;
+
     const updatedUser = await user.save();
-    res.status(200).json({ message: "Profile updated successfully", updatedUser });
+
+    res.status(200).json({
+      message: "Profile updated successfully",
+      updatedUser,
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({
+      message: error.message,
+    });
   }
 };
 

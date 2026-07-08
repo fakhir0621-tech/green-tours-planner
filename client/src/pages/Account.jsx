@@ -254,27 +254,72 @@ export default function Account() {
     finally { setAiLoading(false); }
   };
 
-  const handlePhotoChange = (e) => {
-    const file = e.target.files[0]; if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => { setProfilePhoto(ev.target.result); setProfilePhotoPreview(ev.target.result); };
-    reader.readAsDataURL(file);
+const handlePhotoChange = (e) => {
+  const file = e.target.files?.[0];
+
+  if (!file) return;
+
+  if (!file.type.startsWith("image/")) {
+    setProfileError("Please select a valid image file.");
+    return;
+  }
+
+  const reader = new FileReader();
+
+  reader.onload = (event) => {
+    setProfilePhoto(event.target.result);
+    setProfilePhotoPreview(event.target.result);
+    setProfileError("");
   };
 
-  const handleSaveProfile = async (e) => {
-    e.preventDefault();
-    if (!profileForm.name || !profileForm.email) { setProfileError("Name and email are required."); return; }
-    setSavingProfile(true); setProfileError("");
-    try {
-      const payload = { ...profileForm };
-      if (profilePhoto) payload.photo = profilePhoto;
-      await fetch(`${BASE_URL}/users/profile/${user._id || user.id}`, { method: "PUT", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify(payload) });
-    } catch {}
-    updateUser({ name: profileForm.name, email: profileForm.email, phone: profileForm.phone, bio: profileForm.bio, ...(profilePhoto ? { photo: profilePhoto } : {}) });
+  reader.readAsDataURL(file);
+};
+
+const handleSaveProfile = async (e) => {
+  e.preventDefault();
+
+  if (!profileForm.name || !profileForm.email) {
+    setProfileError("Name and email are required.");
+    return;
+  }
+
+  setSavingProfile(true);
+  setProfileError("");
+
+  try {
+    const payload = {
+      ...profileForm,
+      ...(profilePhoto ? { photo: profilePhoto } : {}),
+    };
+
+    const response = await fetch(
+      `${BASE_URL}/users/profile/${user._id || user.id}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || "Failed to update profile.");
+    }
+
+    updateUser(data.updatedUser);
+
     setProfileSuccess("Profile updated! ✅");
     setTimeout(() => setProfileSuccess(""), 4000);
+  } catch (error) {
+    setProfileError(error.message || "Something went wrong while updating your profile.");
+  } finally {
     setSavingProfile(false);
-  };
+  }
+};
 
   const handleCancelBooking = async (id) => {
     if (!window.confirm("Cancel this booking?")) return;
